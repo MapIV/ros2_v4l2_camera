@@ -37,6 +37,8 @@
 #include <nppi_support_functions.h>
 #endif
 
+#include "v4l2_camera/jpeg_compression.hpp"
+
 namespace v4l2_camera
 {
 #ifdef ENABLE_CUDA
@@ -97,6 +99,7 @@ private:
 
   // Publisher used for intra process comm
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_image_pub_;
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub_;
 
   // Publisher used for inter process comm
@@ -125,6 +128,8 @@ private:
   std::shared_ptr<GPUMemoryManager> src_dev_;
   std::shared_ptr<GPUMemoryManager> dst_dev_;
 #endif
+
+  JpegCompression::JpegCompressor jpeg_compressor_;
 
   void createParameters();
   bool handleParameter(rclcpp::Parameter const & param);

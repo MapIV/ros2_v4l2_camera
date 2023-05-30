@@ -65,6 +65,9 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   camera_transport_pub_ = image_transport::create_camera_publisher(this, "image_raw",
                                                                    qos.get_rmw_qos_profile());
 
+  compressed_image_pub_ = this->create_publisher<sensor_msgs::msg::CompressedImage>(
+    "image_raw/compressed", qos);
+
   // Prepare camera
   auto device_descriptor = rcl_interfaces::msg::ParameterDescriptor{};
   device_descriptor.description = "Path to video device";
@@ -128,6 +131,10 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
         publish_next_frame_ = publish_rate_ < 0;
 
         camera_transport_pub_.publish(*img, *ci);
+
+        auto compressed_img = jpeg_compressor_.compress(img, 10);
+
+        compressed_image_pub_->publish(std::move(compressed_img));
       }
     }
   };
