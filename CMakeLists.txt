@@ -75,6 +75,21 @@ if (CUDA_FOUND)
   #   # nvjpeg
   #   )
 
+  cuda_add_library(correction src/correction.cpp)
+  target_include_directories(correction PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/v4l2_camera>
+    ${CUDA_INCLUDE_DIR}
+  )
+  target_link_directories(correction PUBLIC
+    ${SYS_ROOT}/lib/aarch64-linux-gnu
+    ${SYS_ROOT}/usr/lib/aarch64-linux-gnu
+    ${SYS_ROOT}/usr/lib/aarch64-linux-gnu/tegra)
+  target_link_libraries(correction
+    ${CUDA_nppidei_LIBRARY}
+    ${CUDA_nppig_LIBRARY}
+  )
+
   message(STATUS "CUDA Support is enabled in ${PROJECT_NAME}")
   cuda_add_library(v4l2_camera
     src/v4l2_camera.cpp
@@ -90,6 +105,7 @@ if (CUDA_FOUND)
     ${CUDA_nppicc_LIBRARY}
     ${CUDA_nppisu_LIBRARY}
     jpeg_compression
+    correction
   )
 else()
   add_library(v4l2_camera
@@ -110,11 +126,15 @@ ament_target_dependencies(v4l2_camera
 
 ament_target_dependencies(jpeg_compression
   "rclcpp"
+  "rclcpp_components")
+
+ament_target_dependencies(correction
+  "rclcpp"
   "rclcpp_components"
   "camera_info_manager")
 
-# target_compile_options(v4l2_camera PRIVATE -Werror)
-target_compile_options(v4l2_camera PRIVATE -H)
+target_compile_options(v4l2_camera PRIVATE -Werror)
+# target_compile_options(v4l2_camera PRIVATE -H)
 
 # Causes the visibility macros to use dllexport rather than dllimport,
 # which is appropriate when building the dll but not consuming it.
@@ -125,7 +145,7 @@ install(
   DESTINATION include
 )
 install(
-  TARGETS v4l2_camera jpeg_compression
+  TARGETS v4l2_camera jpeg_compression correction
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -165,6 +185,7 @@ ament_export_targets(
 ament_export_libraries(
   v4l2_camera
   jpeg_compression
+  correction
 )
 
 ament_export_dependencies(

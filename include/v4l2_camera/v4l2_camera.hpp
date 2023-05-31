@@ -38,6 +38,7 @@
 #endif
 
 #include "v4l2_camera/jpeg_compression.hpp"
+#include "v4l2_camera/correction.hpp"
 
 namespace v4l2_camera
 {
@@ -99,7 +100,9 @@ private:
 
   // Publisher used for intra process comm
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr rect_image_pub_;
   rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_image_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_rect_image_pub_;
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub_;
 
   // Publisher used for inter process comm
@@ -130,6 +133,7 @@ private:
 #endif
 
   JpegCompression::JpegCompressor jpeg_compressor_;
+  std::shared_ptr<Correction::GPUCorrection> correction_;
 
   void createParameters();
   bool handleParameter(rclcpp::Parameter const & param);

@@ -61,12 +61,18 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   else{
     publish_next_frame_ = true;
   }
+  
   const auto qos = use_sensor_data_qos ? rclcpp::SensorDataQoS() : rclcpp::QoS(10);
   camera_transport_pub_ = image_transport::create_camera_publisher(this, "image_raw",
                                                                    qos.get_rmw_qos_profile());
 
+  // TODO: Proper naming
+  rect_image_pub_ = this->create_publisher<sensor_msgs::msg::Image>(
+    "c1/image_rect", qos);
   compressed_image_pub_ = this->create_publisher<sensor_msgs::msg::CompressedImage>(
-    "image_raw/compressed", qos);
+    "c1/image_raw/compressed", qos);
+  compressed_rect_image_pub_ = this->create_publisher<sensor_msgs::msg::CompressedImage>(
+    "c1/image_rect/compressed", qos);
 
   // Prepare camera
   auto device_descriptor = rcl_interfaces::msg::ParameterDescriptor{};
@@ -91,6 +97,21 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   // Start the camera
   if (!camera_->start()) {
     return;
+  }
+
+  {
+    // TODO: Move this to inside GPUCorrection
+    auto camera_info = cinfo_->getCameraInfo();
+    std::vector<float> map_x, map_y;
+
+    int width = camera_info.width; 
+    int height = camera_info.height;
+    double *D = camera_info.d.data();
+    double *K = camera_info.k.data();
+    double *R = camera_info.r.data();
+    double *P = camera_info.p.data();
+
+    correction_ = std::make_shared<Correction::GPUCorrection>(width, height, D, K, R, P);
   }
 
   // Start capture thread
@@ -132,9 +153,27 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
 
         camera_transport_pub_.publish(*img, *ci);
 
-        auto compressed_img = jpeg_compressor_.compress(img, 10);
+        std::vector<float> map_x(img->width * img->height);
+        std::vector<float> map_y(img->width * img->height);
 
-        compressed_image_pub_->publish(std::move(compressed_img));
+        // mirror image
+        for (uint i = 0; i < img->height; i++) {
+          for (uint j = 0; j < img->width; j++) {
+            map_x[i * img->width + j] = img->width - j;
+            map_y[i * img->width + j] = i;
+          }
+        }
+
+        // Correction::GPUCorrection correction(img->width, img->height, map_x.data(), map_y.data());
+        auto rect_img = correction_->correct(img);
+        rect_image_pub_->publish(std::move(rect_img));
+
+        // TODO: This
+        // auto compressed_img = jpeg_compressor_.compress(img, 10);
+        // compressed_image_pub_->publish(std::move(compressed_img));
+
+        // auto compressed_rect_img = jpeg_compressor_.compress(rect_img, 10);
+        // compressed_rect_image_pub_->publish(std::move(compressed_rect_img));
       }
     }
   };
