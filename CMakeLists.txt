@@ -24,58 +24,62 @@ find_package(CUDA)
 find_package(LibJpegTurbo REQUIRED)
 include_directories(${LIBJPEGTURBO_INCLUDE_DIRS})
 
-add_library(jpeg_compression src/jpeg_compression.cpp
-)
-target_include_directories(jpeg_compression PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include/v4l2_camera>
-)
-target_link_directories(jpeg_compression PUBLIC
-  ${SYS_ROOT}/lib/aarch64-linux-gnu
-  ${SYS_ROOT}/usr/lib/aarch64-linux-gnu
-  ${SYS_ROOT}/usr/lib/aarch64-linux-gnu/tegra)
-target_link_libraries(jpeg_compression
-  ${LIBJPEGTURBO_LIBRARIES}
-)
+# TODO: Make source file paths better
+# TODO: Use libjpeg-turbo when CUDA is not present?
+# add_library(jpeg_compression src/jpeg_compression.cpp
+# )
+# target_include_directories(jpeg_compression PUBLIC
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#   $<INSTALL_INTERFACE:include/v4l2_camera>
+# )
+# target_link_directories(jpeg_compression PUBLIC
+#   ${SYS_ROOT}/lib/aarch64-linux-gnu
+#   ${SYS_ROOT}/usr/lib/aarch64-linux-gnu
+#   ${SYS_ROOT}/usr/lib/aarch64-linux-gnu/tegra)
+# target_link_libraries(jpeg_compression
+#   ${LIBJPEGTURBO_LIBRARIES}
+# )
 
 if (CUDA_FOUND)
   # Jetson
-  # find_package(CUDAToolkit)
+  find_package(CUDAToolkit)
 
-  # include(FetchContent)
-  # FetchContent_Declare(cuda-api-wrappers
-  #     GIT_REPOSITORY https://github.com/eyalroz/cuda-api-wrappers.git
-  #     GIT_TAG 831666a0bfd1af0f44f4fa234ee2d983d347fcaa # v0.6.1-rc1
-  # )
-  # FetchContent_MakeAvailable(cuda-api-wrappers)
+  include(FetchContent)
+  FetchContent_Declare(cuda-api-wrappers
+      GIT_REPOSITORY https://github.com/eyalroz/cuda-api-wrappers.git
+      GIT_TAG 831666a0bfd1af0f44f4fa234ee2d983d347fcaa # v0.6.1-rc1
+  )
+  FetchContent_MakeAvailable(cuda-api-wrappers)
 
-  # add_library(jpeg_compression src/jpeg_compression.cpp
-  #   /usr/src/jetson_multimedia_api/samples/common/classes/NvBuffer.cpp
-  #   /usr/src/jetson_multimedia_api/samples/common/classes/NvElement.cpp
-  #   /usr/src/jetson_multimedia_api/samples/common/classes/NvElementProfiler.cpp
-  #   /usr/src/jetson_multimedia_api/samples/common/classes/NvJpegEncoder.cpp
-  #   /usr/src/jetson_multimedia_api/samples/common/classes/NvLogging.cpp
-  # )
-  # target_include_directories(jpeg_compression PUBLIC
-  #   # ${CUDA_INCLUDE_DIR}
-  #   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  #   $<INSTALL_INTERFACE:include/v4l2_camera>
-  #   # ${SYS_ROOT}/usr/src/jetson_multimedia_api/include
-  #   # ${SYS_ROOT}/usr/src/jetson_multimedia_api/include/libjpeg-8b
-  # )
-  # target_link_directories(jpeg_compression PUBLIC
-  #   ${SYS_ROOT}/lib/aarch64-linux-gnu
-  #   ${SYS_ROOT}/usr/lib/aarch64-linux-gnu
-  #   ${SYS_ROOT}/usr/lib/aarch64-linux-gnu/tegra)
-  # target_link_libraries(jpeg_compression
-  #   # ${CUDA_nppicc_LIBRARY}
-  #   # ${CUDA_nppisu_LIBRARY}
-  #   ${LIBJPEGTURBO_LIBRARIES}
-  #   # /usr/lib/aarch64-linux-gnu/libjpeg.so
-  #   # nvjpeg
-  #   )
+  add_library(jpeg_compression src/jpeg_compression.cpp
+    /usr/src/jetson_multimedia_api/samples/common/classes/NvBuffer.cpp
+    /usr/src/jetson_multimedia_api/samples/common/classes/NvElement.cpp
+    /usr/src/jetson_multimedia_api/samples/common/classes/NvElementProfiler.cpp
+    /usr/src/jetson_multimedia_api/samples/common/classes/NvJpegEncoder.cpp
+    /usr/src/jetson_multimedia_api/samples/common/classes/NvLogging.cpp
+  )
+  target_include_directories(jpeg_compression PUBLIC
+    ${CUDA_INCLUDE_DIR}
+    ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/v4l2_camera>
+    ${SYS_ROOT}/usr/src/jetson_multimedia_api/include
+    ${SYS_ROOT}/usr/src/jetson_multimedia_api/include/libjpeg-8b
+  )
+  target_link_directories(jpeg_compression PUBLIC
+    ${SYS_ROOT}/lib/aarch64-linux-gnu
+    ${SYS_ROOT}/usr/lib/aarch64-linux-gnu
+    ${SYS_ROOT}/usr/lib/aarch64-linux-gnu/tegra)
+  target_link_libraries(jpeg_compression
+    ${CUDA_nppicc_LIBRARY}
+    # ${CUDA_nppisu_LIBRARY}
+    ${LIBJPEGTURBO_LIBRARIES}
+    # /usr/lib/aarch64-linux-gnu/libjpeg.so
+    nvjpeg
+    cuda-api-wrappers::runtime-and-driver
+  )
 
-  cuda_add_library(correction src/correction.cpp)
+  cuda_add_library(correction src/correction.cpp src/color_space.cu)
   target_include_directories(correction PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include/v4l2_camera>
@@ -133,7 +137,8 @@ ament_target_dependencies(correction
   "rclcpp_components"
   "camera_info_manager")
 
-target_compile_options(v4l2_camera PRIVATE -Werror)
+# TODO: Allow for -Werror
+# target_compile_options(v4l2_camera PRIVATE -Werror)
 # target_compile_options(v4l2_camera PRIVATE -H)
 
 # Causes the visibility macros to use dllexport rather than dllimport,
@@ -157,14 +162,16 @@ target_include_directories(v4l2_camera_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 target_link_libraries(v4l2_camera_node v4l2_camera)
-target_compile_options(v4l2_camera_node PRIVATE -Werror)
+# TODO: Allow for -Werror
+# target_compile_options(v4l2_camera_node PRIVATE -Werror)
 
 add_executable(v4l2_camera_compose_test src/v4l2_camera_compose_test.cpp)
 target_include_directories(v4l2_camera_compose_test PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 target_link_libraries(v4l2_camera_compose_test v4l2_camera)
-target_compile_options(v4l2_camera_compose_test PRIVATE -Werror)
+# TODO: Allow for -Werror
+# target_compile_options(v4l2_camera_compose_test PRIVATE -Werror)
 
 install(TARGETS v4l2_camera_node v4l2_camera_compose_test
   EXPORT export_${PROJECT_NAME}

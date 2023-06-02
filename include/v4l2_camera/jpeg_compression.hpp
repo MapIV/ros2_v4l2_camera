@@ -4,7 +4,12 @@
 #include <sensor_msgs/msg/compressed_image.hpp>
 #include <turbojpeg.h>
 
-// class NvJPEGEncoder;
+#include <NvJpegEncoder.h>
+#include <cuda/api.hpp>
+
+#include <string>
+
+class NvJPEGEncoder;
 
 namespace JpegCompression {
 using Image = sensor_msgs::msg::Image;
@@ -39,16 +44,42 @@ using CompressedImage = sensor_msgs::msg::CompressedImage;
 //     int quality;
 // };
 
-class JpegCompressor {
-public:
-    JpegCompressor();
-    ~JpegCompressor();
+enum Sampling {
+    YUV420,
+    YUV422,
+};
 
-    CompressedImage::UniquePtr compress(Image::UniquePtr &msg, int quality = 95, int sampling = TJ_420, int format = TJPF_RGB);
+enum ImageFormat {
+    RGB,
+    BGR
+};
+
+class CPUCompressor {
+public:
+    CPUCompressor();
+    ~CPUCompressor();
+
+    CompressedImage::UniquePtr compress(Image::UniquePtr &msg, int quality = 90,int format = TJPF_RGB, int sampling = TJ_420);
 private:
     tjhandle handle_;
     unsigned char *jpegBuf_;
     unsigned long size_;
+};
+
+// TODO: Make this cleaner (don't want to include NvJpegEncoder.h outside this library)
+class JetsonCompressor {
+public:
+    JetsonCompressor(std::string name);
+    ~JetsonCompressor();
+
+    CompressedImage::UniquePtr compress(Image::UniquePtr &msg, int quality = 90, int format = BGR, int sampling = YUV420);
+private:
+    NvJPEGEncoder *encoder_;
+    size_t image_size{};
+    size_t yuv_size{};
+    cuda::memory::device::unique_ptr<uint8_t[]> dev_image;
+    cuda::memory::host::unique_ptr<uint8_t[]> host_yuv;
+    cuda::memory::device::unique_ptr<uint8_t[]> dev_yuv;
 };
 
 } // namespace JpegCompression

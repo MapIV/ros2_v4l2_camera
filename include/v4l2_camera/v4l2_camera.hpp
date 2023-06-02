@@ -132,7 +132,10 @@ private:
   std::shared_ptr<GPUMemoryManager> dst_dev_;
 #endif
 
-  JpegCompression::JpegCompressor jpeg_compressor_;
+  JpegCompression::CPUCompressor cpu_compressor_;
+  // TODO: Use ENABLE_CUDA guards where it matters
+  std::shared_ptr<JpegCompression::JetsonCompressor> jetson_compressor_;
+  std::shared_ptr<JpegCompression::JetsonCompressor> jetson_compressor2_;
   std::shared_ptr<Correction::GPUCorrection> correction_;
 
   void createParameters();

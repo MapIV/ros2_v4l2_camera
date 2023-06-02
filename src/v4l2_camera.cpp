@@ -63,16 +63,22 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   }
   
   const auto qos = use_sensor_data_qos ? rclcpp::SensorDataQoS() : rclcpp::QoS(10);
-  camera_transport_pub_ = image_transport::create_camera_publisher(this, "image_raw",
-                                                                   qos.get_rmw_qos_profile());
+  // camera_transport_pub_ = image_transport::create_camera_publisher(this, "image_raw",
+  //                                                                  qos.get_rmw_qos_profile());
+
+  image_pub_ = this->create_publisher<sensor_msgs::msg::Image>(
+    "test/image_raw", qos);
 
   // TODO: Proper naming
   rect_image_pub_ = this->create_publisher<sensor_msgs::msg::Image>(
-    "c1/image_rect", qos);
+    "test/image_rect", qos);
   compressed_image_pub_ = this->create_publisher<sensor_msgs::msg::CompressedImage>(
-    "c1/image_raw/compressed", qos);
+    "test/image_raw/compressed", qos);
   compressed_rect_image_pub_ = this->create_publisher<sensor_msgs::msg::CompressedImage>(
-    "c1/image_rect/compressed", qos);
+    "test/image_rect/compressed", qos);
+
+  info_pub_ = this->create_publisher<sensor_msgs::msg::CameraInfo>(
+    "test/camera_info", qos);
 
   // Prepare camera
   auto device_descriptor = rcl_interfaces::msg::ParameterDescriptor{};
@@ -102,7 +108,6 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   {
     // TODO: Move this to inside GPUCorrection
     auto camera_info = cinfo_->getCameraInfo();
-    std::vector<float> map_x, map_y;
 
     int width = camera_info.width; 
     int height = camera_info.height;
@@ -113,6 +118,9 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
 
     correction_ = std::make_shared<Correction::GPUCorrection>(width, height, D, K, R, P);
   }
+
+  jetson_compressor_ = std::make_shared<JpegCompression::JetsonCompressor>("raw_comp");
+  jetson_compressor2_ = std::make_shared<JpegCompression::JetsonCompressor>("rect_comp");
 
   // Start capture thread
   capture_thread_ = std::thread{
@@ -151,29 +159,23 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
         ci->header.frame_id = camera_frame_id_;
         publish_next_frame_ = publish_rate_ < 0;
 
-        camera_transport_pub_.publish(*img, *ci);
-
-        std::vector<float> map_x(img->width * img->height);
-        std::vector<float> map_y(img->width * img->height);
-
-        // mirror image
-        for (uint i = 0; i < img->height; i++) {
-          for (uint j = 0; j < img->width; j++) {
-            map_x[i * img->width + j] = img->width - j;
-            map_y[i * img->width + j] = i;
-          }
-        }
+        // camera_transport_pub_.publish(*img, *ci);
 
         // Correction::GPUCorrection correction(img->width, img->height, map_x.data(), map_y.data());
         auto rect_img = correction_->correct(img);
+
+        // TODO: For some reason the colors are inverted...
+        // changing format from BGR to RGB doesn't work. Fix this.
+        auto compressed_rect_img = jetson_compressor2_->compress(rect_img, 90);
+        compressed_rect_image_pub_->publish(std::move(compressed_rect_img));
+
         rect_image_pub_->publish(std::move(rect_img));
 
-        // TODO: This
-        // auto compressed_img = jpeg_compressor_.compress(img, 10);
-        // compressed_image_pub_->publish(std::move(compressed_img));
+        auto compressed_img = jetson_compressor_->compress(img, 90);
+        compressed_image_pub_->publish(std::move(compressed_img));
 
-        // auto compressed_rect_img = jpeg_compressor_.compress(rect_img, 10);
-        // compressed_rect_image_pub_->publish(std::move(compressed_rect_img));
+        image_pub_->publish(std::move(img));
+        info_pub_->publish(std::move(ci));
       }
     }
   };
