@@ -24,6 +24,7 @@ private:
     int pxl_map_x_step_;
     int pxl_map_y_step_;
     int interpolation_;
+    cudaStream_t stream_;
 };
 
 }
