@@ -6,6 +6,16 @@
 #include <nppi_geometry_transforms.h>
 #include <nppi_support_functions.h>
 
+#include <image_geometry/pinhole_camera_model.h>
+#include <cv_bridge/cv_bridge.h>
+
+// #include <opencv2/cudafeatures2d.hpp>
+// #include <opencv2/cudaimgproc.hpp>
+#include <opencv2/cudaarithm.hpp>
+#include <opencv2/cudafeatures2d.hpp>
+#include <opencv2/cudawarping.hpp>
+
+
 #define CHECK_NPP_STATUS(status) \
     if (status != NPP_SUCCESS) { \
         RCLCPP_ERROR(rclcpp::get_logger("v4l2_camera"), "NPP error: %d (%s:%d)", status, __FILE__, __LINE__); \
@@ -129,27 +139,27 @@ GPUCorrection::~GPUCorrection() {
     cudaStreamDestroy(stream_);
 }
 
-Image::UniquePtr GPUCorrection::correct(Image::UniquePtr &msg) {
+Image::UniquePtr GPUCorrection::correct(const Image &msg) {
     Image::UniquePtr result = std::make_unique<Image>();
-    result->header = msg->header;
-    result->height = msg->height;
-    result->width = msg->width;
-    result->encoding = msg->encoding;
-    result->is_bigendian = msg->is_bigendian;
-    result->step = msg->step;
+    result->header = msg.header;
+    result->height = msg.height;
+    result->width = msg.width;
+    result->encoding = msg.encoding;
+    result->is_bigendian = msg.is_bigendian;
+    result->step = msg.step;
 
-    result->data.resize(msg->data.size());
+    result->data.resize(msg.data.size());
 
-    NppiRect src_roi = {0, 0, (int)msg->width, (int)msg->height};
-    NppiSize src_size = {(int)msg->width, (int)msg->height};
-    NppiSize dst_roi_size = {(int)msg->width, (int)msg->height};
+    NppiRect src_roi = {0, 0, (int)msg.width, (int)msg.height};
+    NppiSize src_size = {(int)msg.width, (int)msg.height};
+    NppiSize dst_roi_size = {(int)msg.width, (int)msg.height};
     int src_step;
     int dst_step;
 
-    Npp8u *src = nppiMalloc_8u_C3(msg->width, msg->height, &src_step);
-    Npp8u *dst = nppiMalloc_8u_C3(msg->width, msg->height, &dst_step);
+    Npp8u *src = nppiMalloc_8u_C3(msg.width, msg.height, &src_step);
+    Npp8u *dst = nppiMalloc_8u_C3(msg.width, msg.height, &dst_step);
 
-    CHECK_CUDA_STATUS(cudaMemcpy2D(src, src_step, msg->data.data(), msg->step, msg->width * 3, msg->height, cudaMemcpyHostToDevice));
+    CHECK_CUDA_STATUS(cudaMemcpy2D(src, src_step, msg.data.data(), msg.step, msg.width * 3, msg.height, cudaMemcpyHostToDevice));
 
     NppiInterpolationMode interpolation = NPPI_INTER_LINEAR;
 
@@ -158,12 +168,78 @@ Image::UniquePtr GPUCorrection::correct(Image::UniquePtr &msg) {
         pxl_map_x_, pxl_map_x_step_, pxl_map_y_, pxl_map_y_step_,
         dst, dst_step, dst_roi_size, interpolation));
 
-    CHECK_CUDA_STATUS(cudaMemcpy2D(result->data.data(), result->step, dst, dst_step, msg->width * 3, msg->height, cudaMemcpyDeviceToHost));
+    CHECK_CUDA_STATUS(cudaMemcpy2D(result->data.data(), result->step, dst, dst_step, msg.width * 3, msg.height, cudaMemcpyDeviceToHost));
 
     nppiFree(src);
     nppiFree(dst);
 
     return result;
+}
+
+OpenCVCorrection::OpenCVCorrection(const CameraInfo &info) {
+    image_geometry::PinholeCameraModel model;
+    model.fromCameraInfo(info);
+    std::cout << info.height << ":" << info.width << std::endl
+    << info.distortion_model << std::endl;
+
+    for (int i = 0; i < info.k.size(); ++i) {
+        std::cout << info.k[i] << " ";
+    }
+    std::cout << std::endl;
+    for (int i = 0; i < info.d.size(); ++i) {
+        std::cout << info.d[i] << " ";
+    }
+    std::cout << std::endl;
+
+    // std::cout << model.fullResolution() << std::endl;
+
+    cv::Mat m1;
+    cv::Mat m2;
+    // TODO: Crashes below! Reason is: model
+    // cv::initUndistortRectifyMap(model.intrinsicMatrix(),
+    //     model.distortionCoeffs(),
+    //     cv::Mat(),
+    //     model.intrinsicMatrix(),
+    //     model.fullResolution(),
+    //     CV_32FC1,
+    //     m1, m2);
+    // map_x_ = cv::cuda::GpuMat(m1);
+    // map_y_ = cv::cuda::GpuMat(m2);
+}
+
+OpenCVCorrection::~OpenCVCorrection() {}
+
+Image::UniquePtr OpenCVCorrection::correct(const Image &msg) {
+    auto image = cv_bridge::toCvCopy(msg);
+    cv::cuda::GpuMat image_gpu(image->image);
+    cv::cuda::GpuMat image_gpu_rect(cv::Size(image->image.rows, 
+      image->image.cols), 
+      image->image.type());
+    cv::cuda::remap(image_gpu, 
+      image_gpu_rect, 
+      map_x_, map_y_, 
+      cv::INTER_LINEAR, 
+      cv::BORDER_CONSTANT);
+    cv::Mat image_rect = cv::Mat(image_gpu_rect);
+
+    // Image::UniquePtr result = std::make_unique<Image>();
+    // result->header = msg.header;
+    // result->height = msg.height;
+    // result->width = msg.width;
+    // result->encoding = msg.encoding;
+    // result->is_bigendian = msg.is_bigendian;
+    // result->step = msg.step;
+
+    // result->data.resize(msg.data.size());
+    // memcpy(result->data.data(), image_rect.data, msg.data.size());
+
+    cv_bridge::CvImage cv_image;
+    cv_image.header = msg.header;
+    cv_image.encoding = msg.encoding;
+    cv_image.image = image_rect;
+
+    // TODO: Fix this evil hack
+    return std::make_unique<Image>(*cv_image.toImageMsg());
 }
 
 } // namespace Correction
