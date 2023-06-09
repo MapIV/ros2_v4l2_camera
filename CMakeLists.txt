@@ -40,6 +40,9 @@ include_directories(${LIBJPEGTURBO_INCLUDE_DIRS})
 #   ${LIBJPEGTURBO_LIBRARIES}
 # )
 
+find_package(OpenCV)
+find_package(cv_bridge)
+
 if (CUDA_FOUND)
   # Jetson
   find_package(CUDAToolkit)
@@ -84,6 +87,7 @@ if (CUDA_FOUND)
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include/v4l2_camera>
     ${CUDA_INCLUDE_DIR}
+    ${OpenCV_INCLUDE_DIRS}
   )
   target_link_directories(correction PUBLIC
     ${SYS_ROOT}/lib/aarch64-linux-gnu
@@ -92,6 +96,7 @@ if (CUDA_FOUND)
   target_link_libraries(correction
     ${CUDA_nppidei_LIBRARY}
     ${CUDA_nppig_LIBRARY}
+    ${OpenCV_LIBRARIES}
   )
 
   message(STATUS "CUDA Support is enabled in ${PROJECT_NAME}")
@@ -135,7 +140,9 @@ ament_target_dependencies(jpeg_compression
 ament_target_dependencies(correction
   "rclcpp"
   "rclcpp_components"
-  "camera_info_manager")
+  "camera_info_manager"
+  "image_geometry"
+  "cv_bridge")
 
 # TODO: Allow for -Werror
 # target_compile_options(v4l2_camera PRIVATE -Werror)

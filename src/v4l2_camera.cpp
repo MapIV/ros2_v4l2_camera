@@ -35,7 +35,137 @@
 #include <nppi_color_conversion.h>
 #endif
 
+#include <chrono>
+#include <unordered_map>
+// #include <map>
+
 using namespace std::chrono_literals;
+
+typedef std::chrono::high_resolution_clock::time_point TimeVar;
+#define duration(a)                                                           \
+  ((double)std::chrono::duration_cast<std::chrono::microseconds>(a).count() /  \
+   1e6)
+#define TimeNow() std::chrono::high_resolution_clock::now()
+
+/* Class for recording benchmarking times */
+class TimeLogger
+{
+public:
+  TimeLogger() {}
+  ~TimeLogger() {}
+
+  void startRecording(std::string name)
+  {
+    if (!active_)
+      return;
+
+    start_times_[name] = TimeNow();
+  }
+
+  void stopRecording(std::string name)
+  {
+    if (!active_)
+      return;
+
+    auto start_time = start_times_[name];
+    auto end_time = TimeNow();
+    addTime(name, duration(end_time - start_time));
+  }
+
+  void addTime(std::string name, double time)
+  {
+    if (!active_)
+      return;
+
+    times_[name].push_back(time);
+  }
+
+  double getAverageTime(std::string name)
+  {
+    if (!active_)
+      return 0;
+
+    double sum = 0;
+    for (auto &time : times_[name])
+    {
+      sum += time;
+    }
+    return sum / times_[name].size();
+  }
+
+  size_t count(std::string name)
+  {
+    if (!active_)
+      return 0;
+
+    return times_[name].size();
+  }
+
+  void clear()
+  {
+    if (!active_)
+      return;
+    
+    times_.clear();
+  }
+
+  void clear(std::string name)
+  {
+    if (!active_)
+      return;
+    
+    times_[name].clear();
+  }
+
+  void printHistogram()
+  {
+    if (!active_)
+      return;
+
+    // order by time
+    std::vector<std::pair<std::string, double>> times;
+    double total = 0;
+    for (auto &time : times_)
+    {
+      double avg_time = getAverageTime(time.first);
+      times.push_back(std::make_pair(time.first, avg_time));
+      total += avg_time;
+    }
+
+    std::sort(times.begin(), times.end(),
+              [](const std::pair<std::string, double> &a,
+                 const std::pair<std::string, double> &b) {
+                return a.second > b.second;
+              });
+
+    std::cout << "--- Histogram ---" << std::endl;
+    for (auto &time : times)
+    {
+      std::cout
+      << std::setw(25) << std::left
+      << time.first << ": "
+      << std::setw(15) << std::left
+      << time.second * 1000 << " ms"
+      << " (" << time.second / total * 100 << "%)"
+      << std::endl;
+    }
+    std::cout << "Total: " << total * 1000 << " ms" << std::endl;
+    std::cout << "-----------------" << std::endl;
+  }
+
+  void setActive(bool active)
+  {
+    active_ = active;
+  }
+
+private:
+  std::unordered_map<std::string, std::vector<double>>
+      times_; 
+
+  std::unordered_map<std::string, TimeVar> start_times_;
+
+  bool active_ = false;
+} g_time_logger;
 
 namespace v4l2_camera
 {
@@ -80,6 +210,15 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   info_pub_ = this->create_publisher<sensor_msgs::msg::CameraInfo>(
     "test/camera_info", qos);
 
+  // rectifier_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
+  //   "test/image_raw", qos, std::bind(&V4L2Camera::rectifier_callback, this, std::placeholders::_1));
+  // compressor_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
+  //   "test/image_raw", qos, std::bind(&V4L2Camera::compressor_callback, this, std::placeholders::_1));
+  // rect_compressor_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
+  //   "test/image_rect", qos, std::bind(&V4L2Camera::rect_compressor_callback, this, std::placeholders::_1));
+
+  g_time_logger.setActive(declare_parameter("enable_benchmark", true));
+
   // Prepare camera
   auto device_descriptor = rcl_interfaces::msg::ParameterDescriptor{};
   device_descriptor.description = "Path to video device";
@@ -109,6 +248,8 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
     // TODO: Move this to inside GPUCorrection
     auto camera_info = cinfo_->getCameraInfo();
 
+    cv_correction_ = std::make_shared<Correction::OpenCVCorrection>(camera_info);
+
     int width = camera_info.width; 
     int height = camera_info.height;
     double *D = camera_info.d.data();
@@ -116,9 +257,10 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
     double *R = camera_info.r.data();
     double *P = camera_info.p.data();
 
-    correction_ = std::make_shared<Correction::GPUCorrection>(width, height, D, K, R, P);
+    npp_correction_ = std::make_shared<Correction::GPUCorrection>(width, height, D, K, R, P);
   }
 
+  // TODO: This is too ugly
   jetson_compressor_ = std::make_shared<JpegCompression::JetsonCompressor>("raw_comp");
   jetson_compressor2_ = std::make_shared<JpegCompression::JetsonCompressor>("rect_comp");
 
@@ -126,6 +268,8 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   capture_thread_ = std::thread{
     [this]() -> void {
       while (rclcpp::ok() && !canceled_.load()) {
+        g_time_logger.startRecording("capture");
+
         RCLCPP_DEBUG(get_logger(), "Capture...");
         auto img = camera_->capture();
         if (img == nullptr) {
@@ -136,6 +280,9 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
         if(publish_next_frame_ == false){
           continue;
         }
+
+        g_time_logger.stopRecording("capture");
+        g_time_logger.startRecording("convert");
 
         auto stamp = now();
         if (img->encoding != output_encoding_) {
@@ -148,6 +295,9 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
         img->header.stamp = stamp;
         img->header.frame_id = camera_frame_id_;
 
+        g_time_logger.stopRecording("convert");
+        g_time_logger.startRecording("camera_info");
+
         auto ci = std::make_unique<sensor_msgs::msg::CameraInfo>(cinfo_->getCameraInfo());
         if (!checkCameraInfo(*img, *ci)) {
           *ci = sensor_msgs::msg::CameraInfo{};
@@ -159,23 +309,51 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
         ci->header.frame_id = camera_frame_id_;
         publish_next_frame_ = publish_rate_ < 0;
 
-        // camera_transport_pub_.publish(*img, *ci);
+        // // camera_transport_pub_.publish(*img, *ci);
+        g_time_logger.stopRecording("camera_info");
 
-        // Correction::GPUCorrection correction(img->width, img->height, map_x.data(), map_y.data());
-        auto rect_img = correction_->correct(img);
+        // g_time_logger.startRecording("rectify");
+        // auto rect_img = correction_->correct(*img);
+        // g_time_logger.stopRecording("rectify");
+
+        // g_time_logger.startRecording("rectify");
+        // auto rect_img = cv_correction_->correct(*img);
+        // g_time_logger.stopRecording("rectify");
+
+        g_time_logger.startRecording("compress");
+        auto compressed_img = jetson_compressor_->compress(*img, 30);
+        g_time_logger.stopRecording("compress");
+
+        g_time_logger.startRecording("publish");
+        image_pub_->publish(std::move(img));
+        g_time_logger.stopRecording("publish");
+
+        g_time_logger.startRecording("camera_info_publish");
+        info_pub_->publish(std::move(ci));
+        g_time_logger.stopRecording("camera_info_publish");
+
+        g_time_logger.startRecording("compress_publish");
+        compressed_image_pub_->publish(std::move(compressed_img));
+        g_time_logger.stopRecording("compress_publish");
 
         // TODO: For some reason the colors are inverted...
         // changing format from BGR to RGB doesn't work. Fix this.
-        auto compressed_rect_img = jetson_compressor2_->compress(rect_img, 90);
-        compressed_rect_image_pub_->publish(std::move(compressed_rect_img));
+        // g_time_logger.startRecording("compress_rect");
+        // auto compressed_rect_img = jetson_compressor2_->compress(*rect_img, 90);
+        // g_time_logger.stopRecording("compress_rect");
 
-        rect_image_pub_->publish(std::move(rect_img));
+        // g_time_logger.startRecording("rect_publish");
+        // rect_image_pub_->publish(std::move(rect_img));
+        // g_time_logger.stopRecording("rect_publish");
 
-        auto compressed_img = jetson_compressor_->compress(img, 90);
-        compressed_image_pub_->publish(std::move(compressed_img));
+        // g_time_logger.startRecording("compress_rect_publish");
+        // compressed_rect_image_pub_->publish(std::move(compressed_rect_img));
+        // g_time_logger.stopRecording("compress_rect_publish");
 
-        image_pub_->publish(std::move(img));
-        info_pub_->publish(std::move(ci));
+        if (g_time_logger.count("publish") % 100 == 0) {
+          g_time_logger.printHistogram();
+          g_time_logger.clear();
+        }
       }
     }
   };
@@ -187,6 +365,46 @@ V4L2Camera::~V4L2Camera()
   if (capture_thread_.joinable()) {
     capture_thread_.join();
   }
+}
+
+// Publish rectified image (and its compressed version) when
+// the camera image is received
+void V4L2Camera::rectifier_callback(const sensor_msgs::msg::Image::SharedPtr msg)
+{
+  // g_time_logger.startRecording("rectify");
+  // auto rect_img = correction_->correct(msg);
+  // g_time_logger.stopRecording("rectify");
+
+  // g_time_logger.startRecording("compress_rect");
+  // auto compressed_rect_img = jetson_compressor2_->compress(msg, 30);
+  // g_time_logger.stopRecording("compress_rect");
+  // g_time_logger.startRecording("compress_rect_publish");
+  // compressed_rect_image_pub_->publish(std::move(compressed_rect_img));
+  // g_time_logger.stopRecording("compress_rect_publish");
+
+  // g_time_logger.startRecording("rect_publish");
+  // rect_image_pub_->publish(std::move(rect_img));
+  // g_time_logger.stopRecording("rect_publish");
+}
+
+void V4L2Camera::compressor_callback(const sensor_msgs::msg::Image::SharedPtr msg)
+{
+  // g_time_logger.startRecording("compress");
+  // auto compressed_img = jetson_compressor_->compress(msg, 30);
+  // g_time_logger.stopRecording("compress");
+  // g_time_logger.startRecording("compress_publish");
+  // compressed_image_pub_->publish(std::move(compressed_img));
+  // g_time_logger.stopRecording("compress_publish");
+}
+
+void V4L2Camera::rect_compressor_callback(const sensor_msgs::msg::Image::SharedPtr msg)
+{
+  // g_time_logger.startRecording("compress_rect");
+  // auto compressed_rect_img = jetson_compressor2_->compress(msg, 30);
+  // g_time_logger.stopRecording("compress_rect");
+  // g_time_logger.startRecording("compress_rect_publish");
+  // compressed_rect_image_pub_->publish(std::move(compressed_rect_img));
+  // g_time_logger.stopRecording("compress_rect_publish");
 }
 
 void V4L2Camera::createParameters()

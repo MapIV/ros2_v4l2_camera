@@ -104,6 +104,9 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_image_pub_;
   rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_rect_image_pub_;
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub_;
+  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr rectifier_sub_;
+  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr compressor_sub_;
+  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr rect_compressor_sub_;
 
   // Publisher used for inter process comm
   image_transport::CameraPublisher camera_transport_pub_;
@@ -136,7 +139,12 @@ private:
   // TODO: Use ENABLE_CUDA guards where it matters
   std::shared_ptr<JpegCompression::JetsonCompressor> jetson_compressor_;
   std::shared_ptr<JpegCompression::JetsonCompressor> jetson_compressor2_;
-  std::shared_ptr<Correction::GPUCorrection> correction_;
+  std::shared_ptr<Correction::GPUCorrection> npp_correction_;
+  std::shared_ptr<Correction::OpenCVCorrection> cv_correction_;
+
+  void rectifier_callback(const sensor_msgs::msg::Image::SharedPtr msg);
+  void compressor_callback(const sensor_msgs::msg::Image::SharedPtr msg);
+  void rect_compressor_callback(const sensor_msgs::msg::Image::SharedPtr msg);
 
   void createParameters();
   bool handleParameter(rclcpp::Parameter const & param);
