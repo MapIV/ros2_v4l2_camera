@@ -21,9 +21,9 @@ CPUCompressor::~CPUCompressor() {
     tjDestroy(handle_);
 }
 
-CompressedImage::UniquePtr CPUCompressor::compress(Image::UniquePtr &msg, int quality, int sampling, int format) {
+CompressedImage::UniquePtr CPUCompressor::compress(const Image &msg, int quality, int sampling, int format) {
     CompressedImage::UniquePtr compressed_msg = std::make_unique<CompressedImage>();
-    compressed_msg->header = msg->header;
+    compressed_msg->header = msg.header;
     compressed_msg->format = "jpeg";
 
     if (jpegBuf_) {
@@ -32,10 +32,10 @@ CompressedImage::UniquePtr CPUCompressor::compress(Image::UniquePtr &msg, int qu
     }
 
     int tjres = tjCompress2(handle_,
-                            msg->data.data(),
-                            msg->width,
+                            msg.data.data(),
+                            msg.width,
                             0,
-                            msg->height,
+                            msg.height,
                             format,
                             &jpegBuf_,
                             &size_,
@@ -59,14 +59,14 @@ JetsonCompressor::~JetsonCompressor() {
     delete encoder_;
 }
 
-CompressedImage::UniquePtr JetsonCompressor::compress(Image::UniquePtr &msg, int quality, int sampling, int format) {
+CompressedImage::UniquePtr JetsonCompressor::compress(const Image &msg, int quality, int sampling, int format) {
     CompressedImage::UniquePtr compressed_msg = std::make_unique<CompressedImage>();
-    compressed_msg->header = msg->header;
+    compressed_msg->header = msg.header;
     compressed_msg->format = "jpeg";
 
-    int width = msg->width;
-    int height = msg->height;
-    auto &img = msg->data;
+    int width = msg.width;
+    int height = msg.height;
+    const auto &img = msg.data;
 
     if (image_size < img.size()) {
       dev_image = cuda::memory::device::make_unique<uint8_t[]>(img.size());

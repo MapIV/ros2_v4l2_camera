@@ -59,7 +59,7 @@ public:
     CPUCompressor();
     ~CPUCompressor();
 
-    CompressedImage::UniquePtr compress(Image::UniquePtr &msg, int quality = 90,int format = TJPF_RGB, int sampling = TJ_420);
+    CompressedImage::UniquePtr compress(const Image &msg, int quality = 90,int format = TJPF_RGB, int sampling = TJ_420);
 private:
     tjhandle handle_;
     unsigned char *jpegBuf_;
@@ -72,7 +72,7 @@ public:
     JetsonCompressor(std::string name);
     ~JetsonCompressor();
 
-    CompressedImage::UniquePtr compress(Image::UniquePtr &msg, int quality = 90, int format = BGR, int sampling = YUV420);
+    CompressedImage::UniquePtr compress(const Image &msg, int quality = 90, int format = BGR, int sampling = YUV420);
 private:
     NvJPEGEncoder *encoder_;
     size_t image_size{};
