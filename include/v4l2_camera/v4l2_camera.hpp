@@ -35,10 +35,10 @@
 #ifdef ENABLE_CUDA
 #include <nppdefs.h>
 #include <nppi_support_functions.h>
+#include "acceleration/jpeg_compressor.hpp"
+#include "acceleration/rectifier.hpp"
 #endif
 
-#include "v4l2_camera/jpeg_compression.hpp"
-#include "v4l2_camera/correction.hpp"
 
 namespace v4l2_camera
 {
@@ -135,12 +135,19 @@ private:
   std::shared_ptr<GPUMemoryManager> dst_dev_;
 #endif
 
-  JpegCompression::CPUCompressor cpu_compressor_;
+#ifdef ENABLE_CUDA  
+  JpegCompressor::CPUCompressor cpu_compressor_;
   // TODO: Use ENABLE_CUDA guards where it matters
-  std::shared_ptr<JpegCompression::JetsonCompressor> jetson_compressor_;
-  std::shared_ptr<JpegCompression::JetsonCompressor> jetson_compressor2_;
-  std::shared_ptr<Correction::GPUCorrection> npp_correction_;
-  std::shared_ptr<Correction::OpenCVCorrection> cv_correction_;
+  std::shared_ptr<JpegCompressor::JetsonCompressor> jetson_compressor_;
+  std::shared_ptr<JpegCompressor::JetsonCompressor> jetson_compressor2_;
+  std::shared_ptr<Rectifier::NPPRectifier> npp_rectifier_;
+#ifdef ENABLE_OPENCV
+  std::shared_ptr<Rectifier::OpenCVRectifierCPU> cv_rectifier_cpu_;
+#endif
+#ifdef ENABLE_OPENCV_CUDA
+  std::shared_ptr<Rectifier::OpenCVRectifierGPU> cv_rectifier_gpu_;
+#endif
+#endif
 
   void rectifier_callback(const sensor_msgs::msg::Image::SharedPtr msg);
   void compressor_callback(const sensor_msgs::msg::Image::SharedPtr msg);

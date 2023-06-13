@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "v4l2_camera/color_space.hpp"
+#include "acceleration/color_space.hpp"
 
 // namespace jetson_encoder_compressed_image_transport
 // {

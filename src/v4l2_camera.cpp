@@ -38,6 +38,7 @@
 #include <chrono>
 #include <unordered_map>
 // #include <map>
+#include <iomanip>
 
 using namespace std::chrono_literals;
 
@@ -245,10 +246,14 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   }
 
   {
-    // TODO: Move this to inside GPUCorrection
+    // TODO: Move this to inside NPPRectifier
     auto camera_info = cinfo_->getCameraInfo();
 
-    cv_correction_ = std::make_shared<Correction::OpenCVCorrection>(camera_info);
+#ifdef ENABLE_OPENCV_CUDA
+    cv_rectifier_gpu_ = std::make_shared<Rectifier::OpenCVRectifierGPU>(camera_info);
+#elif ENABLE_OPENCV
+    cv_rectifier_cpu_ = std::make_shared<Rectifier::OpenCVRectifierCPU>(camera_info);
+#endif
 
     int width = camera_info.width; 
     int height = camera_info.height;
@@ -257,12 +262,14 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
     double *R = camera_info.r.data();
     double *P = camera_info.p.data();
 
-    npp_correction_ = std::make_shared<Correction::GPUCorrection>(width, height, D, K, R, P);
+    npp_rectifier_ = std::make_shared<Rectifier::NPPRectifier>(width, height, D, K, R, P);
   }
 
   // TODO: This is too ugly
-  jetson_compressor_ = std::make_shared<JpegCompression::JetsonCompressor>("raw_comp");
-  jetson_compressor2_ = std::make_shared<JpegCompression::JetsonCompressor>("rect_comp");
+#ifdef ENABLE_JETSON
+  jetson_compressor_ = std::make_shared<JpegCompressor::JetsonCompressor>("raw_comp");
+  jetson_compressor2_ = std::make_shared<JpegCompressor::JetsonCompressor>("rect_comp");
+#endif
 
   // Start capture thread
   capture_thread_ = std::thread{
@@ -317,7 +324,7 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
         // g_time_logger.stopRecording("rectify");
 
         // g_time_logger.startRecording("rectify");
-        // auto rect_img = cv_correction_->correct(*img);
+        // auto rect_img = cv_rectifier_gpu_->correct(*img);
         // g_time_logger.stopRecording("rectify");
 
         g_time_logger.startRecording("compress");

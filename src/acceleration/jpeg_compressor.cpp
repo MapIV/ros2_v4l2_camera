@@ -1,14 +1,14 @@
 #include <cstdio>
 #include <cstring>
-#include <v4l2_camera/jpeg_compression.hpp>
-
 #include <nppi_color_conversion.h>
-#include "v4l2_camera/color_space.hpp"
+
+#include "acceleration/jpeg_compressor.hpp"
+#include "acceleration/color_space.hpp"
 
 #define TEST_ERROR(cond, str) if(cond) { \
                                         fprintf(stderr, "%s\n", str); }
 
-namespace JpegCompression {
+namespace JpegCompressor {
 
 CPUCompressor::CPUCompressor()
     : jpegBuf_(nullptr), size_(0) {
@@ -59,6 +59,7 @@ JetsonCompressor::~JetsonCompressor() {
     delete encoder_;
 }
 
+#ifdef ENABLE_JETSON
 CompressedImage::UniquePtr JetsonCompressor::compress(const Image &msg, int quality, int sampling, int format) {
     CompressedImage::UniquePtr compressed_msg = std::make_unique<CompressedImage>();
     compressed_msg->header = msg.header;
@@ -128,5 +129,6 @@ CompressedImage::UniquePtr JetsonCompressor::compress(const Image &msg, int qual
     
     return compressed_msg;
 }
+#endif
 
-} // namespace JpegCompression
+} // namespace JpegCompressor

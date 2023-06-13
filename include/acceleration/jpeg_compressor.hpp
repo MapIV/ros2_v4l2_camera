@@ -11,7 +11,7 @@
 
 class NvJPEGEncoder;
 
-namespace JpegCompression {
+namespace JpegCompressor {
 using Image = sensor_msgs::msg::Image;
 using CompressedImage = sensor_msgs::msg::CompressedImage;
 
@@ -67,6 +67,7 @@ private:
 };
 
 // TODO: Make this cleaner (don't want to include NvJpegEncoder.h outside this library)
+#ifdef ENABLE_JETSON
 class JetsonCompressor {
 public:
     JetsonCompressor(std::string name);
@@ -81,5 +82,6 @@ private:
     cuda::memory::host::unique_ptr<uint8_t[]> host_yuv;
     cuda::memory::device::unique_ptr<uint8_t[]> dev_yuv;
 };
+#endif
 
-} // namespace JpegCompression
+} // namespace JpegCompressor

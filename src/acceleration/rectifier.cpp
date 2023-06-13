@@ -1,4 +1,4 @@
-#include "v4l2_camera/correction.hpp"
+#include "acceleration/rectifier.hpp"
 #include <rclcpp/rclcpp.hpp>
 
 #include <npp.h>
@@ -6,14 +6,18 @@
 #include <nppi_geometry_transforms.h>
 #include <nppi_support_functions.h>
 
+#ifdef ENABLE_OPENCV
 #include <image_geometry/pinhole_camera_model.h>
 #include <cv_bridge/cv_bridge.h>
 
+#ifdef ENABLE_OPENCV_CUDA
 // #include <opencv2/cudafeatures2d.hpp>
 // #include <opencv2/cudaimgproc.hpp>
 #include <opencv2/cudaarithm.hpp>
 #include <opencv2/cudafeatures2d.hpp>
 #include <opencv2/cudawarping.hpp>
+#endif
+#endif
 
 
 #define CHECK_NPP_STATUS(status) \
@@ -26,9 +30,9 @@
         RCLCPP_ERROR(rclcpp::get_logger("v4l2_camera"), "CUDA error: %s (%s:%d)", cudaGetErrorName(status), __FILE__, __LINE__); \
     }
 
-namespace Correction {
+namespace Rectifier {
 
-GPUCorrection::GPUCorrection(int width, int height,
+NPPRectifier::NPPRectifier(int width, int height,
                              float *map_x, float *map_y,
                              int interpolation) : pxl_map_x_(nullptr), pxl_map_y_(nullptr) {
 
@@ -49,7 +53,7 @@ GPUCorrection::GPUCorrection(int width, int height,
     interpolation_ = interpolation;
 }
 
-GPUCorrection::GPUCorrection(int width, int height,
+NPPRectifier::NPPRectifier(int width, int height,
                              double *D, double *K, double *R, double *P,
                              int interpolation) : pxl_map_x_(nullptr), pxl_map_y_(nullptr) {
     cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking);
@@ -127,7 +131,7 @@ GPUCorrection::GPUCorrection(int width, int height,
     delete[] map_y;
 }
 
-GPUCorrection::~GPUCorrection() {
+NPPRectifier::~NPPRectifier() {
     if (pxl_map_x_ != nullptr) {
         nppiFree(pxl_map_x_);
     }
@@ -139,7 +143,7 @@ GPUCorrection::~GPUCorrection() {
     cudaStreamDestroy(stream_);
 }
 
-Image::UniquePtr GPUCorrection::correct(const Image &msg) {
+Image::UniquePtr NPPRectifier::correct(const Image &msg) {
     Image::UniquePtr result = std::make_unique<Image>();
     result->header = msg.header;
     result->height = msg.height;
@@ -176,7 +180,20 @@ Image::UniquePtr GPUCorrection::correct(const Image &msg) {
     return result;
 }
 
-OpenCVCorrection::OpenCVCorrection(const CameraInfo &info) {
+#ifdef ENABLE_OPENCV
+OpenCVRectifierCPU::OpenCVRectifierCPU(const CameraInfo &info) {
+    // implement
+}
+
+OpenCVRectifierCPU::~OpenCVRectifierCPU() {}
+
+Image::UniquePtr OpenCVRectifierCPU::correct(const Image &msg) {
+    // implement
+}
+#endif
+
+#ifdef ENABLE_OPENCV_CUDA
+OpenCVRectifierGPU::OpenCVRectifierGPU(const CameraInfo &info) {
     image_geometry::PinholeCameraModel model;
     model.fromCameraInfo(info);
     std::cout << info.height << ":" << info.width << std::endl
@@ -207,9 +224,9 @@ OpenCVCorrection::OpenCVCorrection(const CameraInfo &info) {
     // map_y_ = cv::cuda::GpuMat(m2);
 }
 
-OpenCVCorrection::~OpenCVCorrection() {}
+OpenCVRectifierGPU::~OpenCVRectifierGPU() {}
 
-Image::UniquePtr OpenCVCorrection::correct(const Image &msg) {
+Image::UniquePtr OpenCVRectifierGPU::correct(const Image &msg) {
     auto image = cv_bridge::toCvCopy(msg);
     cv::cuda::GpuMat image_gpu(image->image);
     cv::cuda::GpuMat image_gpu_rect(cv::Size(image->image.rows, 
@@ -241,5 +258,6 @@ Image::UniquePtr OpenCVCorrection::correct(const Image &msg) {
     // TODO: Fix this evil hack
     return std::make_unique<Image>(*cv_image.toImageMsg());
 }
+#endif
 
-} // namespace Correction
+} // namespace Rectifier

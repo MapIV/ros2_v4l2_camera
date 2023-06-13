@@ -9,17 +9,17 @@
 using CameraInfo = sensor_msgs::msg::CameraInfo;
 using Image = sensor_msgs::msg::Image;
 
-namespace Correction {
+namespace Rectifier {
 
-class GPUCorrection {
+class NPPRectifier {
 public:
-    GPUCorrection(int width, int height,
+    NPPRectifier(int width, int height,
                   Npp32f *map_x, Npp32f *map_y,
                   int interpolation = NPPI_INTER_LINEAR);
-    GPUCorrection(int width, int height,
+    NPPRectifier(int width, int height,
                   double *D, double *K, double *R, double *P,
                   int interpolation = NPPI_INTER_LINEAR);
-    ~GPUCorrection();
+    ~NPPRectifier();
 
     Image::UniquePtr correct(const Image &msg);
 private:
@@ -31,17 +31,30 @@ private:
     cudaStream_t stream_;
 };
 
-class OpenCVCorrection {
+#ifdef ENABLE_OPENCV
+class OpenCVRectifierCPU {
 public:
-    OpenCVCorrection(const CameraInfo &info);
-    ~OpenCVCorrection();
+    OpenCVRectifierCPU(const CameraInfo &info);
+    ~OpenCVRectifierCPU();
+
+    Image::UniquePtr correct(const Image &msg);
+private:
+    cv::Mat map_x_;
+    cv::Mat map_y_;
+};
+#endif
+
+#ifdef ENABLE_OPENCV_CUDA
+class OpenCVRectifierGPU {
+public:
+    OpenCVRectifierGPU(const CameraInfo &info);
+    ~OpenCVRectifierGPU();
 
     Image::UniquePtr correct(const Image &msg);
 private:
     cv::cuda::GpuMat map_x_;
     cv::cuda::GpuMat map_y_;
-    // cv::Mat map_x_;
-    // cv::Mat map_y_;
 };
+#endif
 
-}
+} // namespace Rectifier
