@@ -41,7 +41,7 @@ include_directories(${LIBJPEGTURBO_INCLUDE_DIRS})
 #   ${LIBJPEGTURBO_LIBRARIES}
 # )
 
-find_package(OpenCV)
+find_package(OpenCV REQUIRED PATHS "/usr/local/")
 
 if (EXISTS "/etc/nv_tegra_release")
   set(JETSON TRUE)
@@ -63,7 +63,8 @@ if (CUDA_FOUND)
     )
     FetchContent_MakeAvailable(cuda-api-wrappers)
 
-    add_library(jpeg_compressor src/acceleration/jpeg_compressor.cpp
+    cuda_add_library(jpeg_compressor src/acceleration/jpeg_compressor.cpp
+      src/acceleration/color_space.cu
       /usr/src/jetson_multimedia_api/samples/common/classes/NvBuffer.cpp
       /usr/src/jetson_multimedia_api/samples/common/classes/NvElement.cpp
       /usr/src/jetson_multimedia_api/samples/common/classes/NvElementProfiler.cpp
@@ -96,9 +97,9 @@ if (CUDA_FOUND)
     )
     message("Using Jetson Multimedia API")
 
+    # include_directories(/usr/local/include/opencv4)
     cuda_add_library(rectifier
-      src/acceleration/rectifier.cpp
-      src/acceleration/color_space.cu)
+      src/acceleration/rectifier.cpp)
     target_include_directories(rectifier PUBLIC
       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
       $<INSTALL_INTERFACE:include/v4l2_camera>
@@ -112,12 +113,14 @@ if (CUDA_FOUND)
     target_link_libraries(rectifier
       ${CUDA_nppidei_LIBRARY}
       ${CUDA_nppig_LIBRARY}
+      ${CUDA_nppicc_LIBRARY}
+      ${CUDA_nppisu_LIBRARY}
       ${OpenCV_LIBRARIES}
     )
 
     # If OpenCV is found
     if (OpenCV_FOUND)
-      message(STATUS "OpenCV version: ${OpenCV_VERSION}")
+      message("OpenCV version: ${OpenCV_VERSION}")
       find_package(cv_bridge REQUIRED)
       target_compile_definitions(rectifier PUBLIC
         ENABLE_OPENCV
@@ -126,7 +129,7 @@ if (CUDA_FOUND)
 
     if (OpenCV_CUDA_VERSION)
       # Found OpenCV with CUDA support
-      message(STATUS "OpenCV CUDA version: ${OpenCV_CUDA_VERSION}")
+      message("OpenCV CUDA version: ${OpenCV_CUDA_VERSION}")
       target_compile_definitions(rectifier PUBLIC
         ENABLE_OPENCV_CUDA
       )
@@ -147,6 +150,21 @@ if (CUDA_FOUND)
   target_link_libraries(v4l2_camera
     ${CUDA_nppicc_LIBRARY}
     ${CUDA_nppisu_LIBRARY}
+    jpeg_compressor
+    rectifier
+  )
+
+  cuda_add_executable(rosbag_player
+    src/rosbag_player.cpp
+  )
+  target_include_directories(rosbag_player PUBLIC
+    ${CUDA_INCLUDE_DIR}
+  )
+  target_link_libraries(rosbag_player
+    ${CUDA_nppicc_LIBRARY}
+    ${CUDA_nppisu_LIBRARY}
+    ${cuda_nppidei_library}
+    ${cuda_nppig_library}
     jpeg_compressor
     rectifier
   )
@@ -214,7 +232,7 @@ target_link_libraries(v4l2_camera_compose_test v4l2_camera)
 # TODO: Allow for -Werror
 # target_compile_options(v4l2_camera_compose_test PRIVATE -Werror)
 
-install(TARGETS v4l2_camera_node v4l2_camera_compose_test
+install(TARGETS v4l2_camera_node v4l2_camera_compose_test rosbag_player
   EXPORT export_${PROJECT_NAME}
   DESTINATION lib/${PROJECT_NAME})
 
