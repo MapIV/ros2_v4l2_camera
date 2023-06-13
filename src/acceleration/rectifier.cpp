@@ -13,9 +13,12 @@
 #ifdef ENABLE_OPENCV_CUDA
 // #include <opencv2/cudafeatures2d.hpp>
 // #include <opencv2/cudaimgproc.hpp>
-#include <opencv2/cudaarithm.hpp>
-#include <opencv2/cudafeatures2d.hpp>
+#include <opencv2/cudafilters.hpp>
 #include <opencv2/cudawarping.hpp>
+#include <opencv2/cudafeatures2d.hpp>
+#include <opencv2/cudaarithm.hpp>
+#include <opencv2/flann.hpp>
+#include <opencv2/core.hpp>
 #endif
 #endif
 
@@ -32,8 +35,41 @@
 
 namespace Rectifier {
 
+void compute_maps(int width, int height, const double *D, const double *P,
+                  float *map_x, float *map_y) {
+    double fx = P[0];
+    double fy = P[5];
+    double cx = P[2];
+    double cy = P[6];
+
+    double k1 = D[0];
+    double k2 = D[1];
+    double p1 = D[2];
+    double p2 = D[3];
+    double k3 = D[4];
+
+    for (int v = 0; v < height; v++) {
+        for (int u = 0; u < width; u++) {
+            double x = (u - cx) / fx;
+            double y = (v - cy) / fy;
+            double r2 = x * x + y * y;
+            double r4 = r2 * r2;
+            double r6 = r4 * r2;
+            double cdist = 1 + k1 * r2 + k2 * r4 + k3 * r6;
+            double xd = x * cdist;
+            double yd = y * cdist;
+            double x2 = xd * xd;
+            double y2 = yd * yd;
+            double xy = xd * yd;
+            double kr = 1 + p1 * r2 + p2 * r4;
+            map_x[v * width + u] = (float)(fx * (xd * kr + 2 * p1 * xy + p2 * (r2 + 2 * x2)) + cx);
+            map_y[v * width + u] = (float)(fy * (yd * kr + p1 * (r2 + 2 * y2) + 2 * p2 * xy) + cy);
+        }
+    }
+}
+
 NPPRectifier::NPPRectifier(int width, int height,
-                             float *map_x, float *map_y,
+                             const Npp32f *map_x, const Npp32f *map_y,
                              int interpolation) : pxl_map_x_(nullptr), pxl_map_y_(nullptr) {
 
     cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking);
@@ -54,7 +90,8 @@ NPPRectifier::NPPRectifier(int width, int height,
 }
 
 NPPRectifier::NPPRectifier(int width, int height,
-                             double *D, double *K, double *R, double *P,
+                             const double *D, const double *K,
+                             const double *R, const double *P,
                              int interpolation) : pxl_map_x_(nullptr), pxl_map_y_(nullptr) {
     cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking);
 
@@ -76,51 +113,7 @@ NPPRectifier::NPPRectifier(int width, int height,
     float *map_x = new float[width * height];
     float *map_y = new float[width * height];
 
-    double fx = P[0];
-    double fy = P[5];
-    double cx = P[2];
-    double cy = P[6];
-
-    double k1 = D[0];
-    double k2 = D[1];
-    double p1 = D[2];
-    double p2 = D[3];
-    double k3 = D[4];
-
-    for (int v = 0; v < height; v++) {
-        for (int u = 0; u < width; u++) {
-            // double x = (u - cx) / fx;
-            // double y = (v - cy) / fy;
-
-            // double xp = x / width;
-            // double yp = y / width;
-
-            // double r2 = xp * xp + yp * yp;
-            // double r4 = r2 * r2;
-            // double r6 = r4 * r2;
-            // double cdist = 1 + k1 * r2 + k2 * r4 + k3 * r6;
-
-            // double xpp = xp * cdist + 2 * p1 * xp * yp + p2 * (r2 + 2 * xp * xp);
-            // double ypp = yp * cdist + p1 * (r2 + 2 * yp * yp) + 2 * p2 * xp * yp;
-
-            // map_x[v * width + u] = (float)(fx * xpp);
-            // map_y[v * width + u] = (float)(fy * ypp);
-            double x = (u - cx) / fx;
-            double y = (v - cy) / fy;
-            double r2 = x * x + y * y;
-            double r4 = r2 * r2;
-            double r6 = r4 * r2;
-            double cdist = 1 + k1 * r2 + k2 * r4 + k3 * r6;
-            double xd = x * cdist;
-            double yd = y * cdist;
-            double x2 = xd * xd;
-            double y2 = yd * yd;
-            double xy = xd * yd;
-            double kr = 1 + p1 * r2 + p2 * r4;
-            map_x[v * width + u] = (float)(fx * (xd * kr + 2 * p1 * xy + p2 * (r2 + 2 * x2)) + cx);
-            map_y[v * width + u] = (float)(fy * (yd * kr + p1 * (r2 + 2 * y2) + 2 * p2 * xy) + cy);
-        }
-    }
+    compute_maps(width, height, D, P, map_x, map_y);
 
     CHECK_CUDA_STATUS(cudaMemcpy2D(pxl_map_x_, pxl_map_x_step_, map_x, width * sizeof(float), width * sizeof(float), height, cudaMemcpyHostToDevice));
     CHECK_CUDA_STATUS(cudaMemcpy2D(pxl_map_y_, pxl_map_y_step_, map_y, width * sizeof(float), width * sizeof(float), height, cudaMemcpyHostToDevice));
@@ -129,6 +122,13 @@ NPPRectifier::NPPRectifier(int width, int height,
 
     delete[] map_x;
     delete[] map_y;
+}
+
+NPPRectifier::NPPRectifier(const CameraInfo& info, int interpolation)
+    : NPPRectifier(info.width, info.height,
+                   info.d.data(), info.k.data(),
+                   info.r.data(), info.p.data(), interpolation)
+{
 }
 
 NPPRectifier::~NPPRectifier() {
@@ -143,7 +143,7 @@ NPPRectifier::~NPPRectifier() {
     cudaStreamDestroy(stream_);
 }
 
-Image::UniquePtr NPPRectifier::correct(const Image &msg) {
+Image::UniquePtr NPPRectifier::rectify(const Image &msg) {
     Image::UniquePtr result = std::make_unique<Image>();
     result->header = msg.header;
     result->height = msg.height;
@@ -182,51 +182,94 @@ Image::UniquePtr NPPRectifier::correct(const Image &msg) {
 
 #ifdef ENABLE_OPENCV
 OpenCVRectifierCPU::OpenCVRectifierCPU(const CameraInfo &info) {
-    // implement
+#if 0
+    cv::Mat k(3, 3, CV_32FC1);
+    cv::Mat d(1, info.d.size(), CV_32FC1);
+
+    k = cv::Mat(3, 3, CV_32FC1, (void *)info.k.data());
+
+    d = cv::Mat(1, info.d.size(), CV_32FC1, (void *)info.d.data());
+
+    cv::initUndistortRectifyMap(k,
+        d,
+        cv::Mat(),
+        k,
+        cv::Size(info.width, info.height),
+        CV_32FC1,
+        map_x_, map_y_);
+#elif
+    float *map_x = new float[info.width * info.height];
+    float *map_y = new float[info.width * info.height];
+
+    compute_maps(info.width, info.height, info.d.data(), info.p.data(), map_x, map_y);
+
+    map_x_ = cv::Mat(info.height, info.width, CV_32FC1, map_x);
+    map_y_ = cv::Mat(info.height, info.width, CV_32FC1, map_y);
+
+    delete[] map_x;
+    delete[] map_y;
+#endif
 }
 
 OpenCVRectifierCPU::~OpenCVRectifierCPU() {}
 
-Image::UniquePtr OpenCVRectifierCPU::correct(const Image &msg) {
-    // implement
+Image::UniquePtr OpenCVRectifierCPU::rectify(const Image &msg) {
+    Image::UniquePtr result = std::make_unique<Image>();
+    result->header = msg.header;
+    result->height = msg.height;
+    result->width = msg.width;
+    result->encoding = msg.encoding;
+    result->is_bigendian = msg.is_bigendian;
+    result->step = msg.step;
+
+    result->data.resize(msg.data.size());
+
+    cv::Mat src(msg.height, msg.width, CV_8UC3, (void *)msg.data.data());
+    cv::Mat dst(msg.height, msg.width, CV_8UC3, (void *)result->data.data());
+
+    cv::remap(src, dst, map_x_, map_y_, cv::INTER_LINEAR);
+
+    return result;
 }
 #endif
 
 #ifdef ENABLE_OPENCV_CUDA
 OpenCVRectifierGPU::OpenCVRectifierGPU(const CameraInfo &info) {
-    image_geometry::PinholeCameraModel model;
-    model.fromCameraInfo(info);
-    std::cout << info.height << ":" << info.width << std::endl
-    << info.distortion_model << std::endl;
+#if 0
+    cv::Mat k(3, 3, CV_32FC1);
+    cv::Mat d(1, 5, CV_32FC1);
 
-    for (int i = 0; i < info.k.size(); ++i) {
-        std::cout << info.k[i] << " ";
-    }
-    std::cout << std::endl;
-    for (int i = 0; i < info.d.size(); ++i) {
-        std::cout << info.d[i] << " ";
-    }
-    std::cout << std::endl;
-
-    // std::cout << model.fullResolution() << std::endl;
+    k = cv::Mat(3, 3, CV_32FC1, (void *)info.k.data());
+    d = cv::Mat(1, info.d.size(), CV_32FC1, (void *)info.d.data());
 
     cv::Mat m1;
     cv::Mat m2;
-    // TODO: Crashes below! Reason is: model
-    // cv::initUndistortRectifyMap(model.intrinsicMatrix(),
-    //     model.distortionCoeffs(),
-    //     cv::Mat(),
-    //     model.intrinsicMatrix(),
-    //     model.fullResolution(),
-    //     CV_32FC1,
-    //     m1, m2);
-    // map_x_ = cv::cuda::GpuMat(m1);
-    // map_y_ = cv::cuda::GpuMat(m2);
+    cv::initUndistortRectifyMap(k,
+        d,
+        cv::Mat(),
+        k,
+        cv::Size(info.width, info.height),
+        CV_32FC1,
+        m1, m2);
+#elif
+    map_x_ = cv::cuda::GpuMat(m1);
+    map_y_ = cv::cuda::GpuMat(m2);
+    float *map_x = new float[info.width * info.height];
+    float *map_y = new float[info.width * info.height];
+
+    compute_maps(info.width, info.height, info.d.data(), info.p.data(), map_x, map_y);
+
+    map_x_ = cv::cuda::GpuMat(info.height, info.width, CV_32FC1, map_x);
+    map_y_ = cv::cuda::GpuMat(info.height, info.width, CV_32FC1, map_y);
+
+    delete[] map_x;
+    delete[] map_y;
+#endif
 }
 
 OpenCVRectifierGPU::~OpenCVRectifierGPU() {}
 
-Image::UniquePtr OpenCVRectifierGPU::correct(const Image &msg) {
+Image::UniquePtr OpenCVRectifierGPU::rectify(const Image &msg) {
     auto image = cv_bridge::toCvCopy(msg);
     cv::cuda::GpuMat image_gpu(image->image);
     cv::cuda::GpuMat image_gpu_rect(cv::Size(image->image.rows, 

@@ -251,8 +251,9 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
 
 #ifdef ENABLE_OPENCV_CUDA
     cv_rectifier_gpu_ = std::make_shared<Rectifier::OpenCVRectifierGPU>(camera_info);
-#elif ENABLE_OPENCV
-    cv_rectifier_cpu_ = std::make_shared<Rectifier::OpenCVRectifierCPU>(camera_info);
+#endif
+#ifdef ENABLE_OPENCV
+    // cv_rectifier_cpu_ = std::make_shared<Rectifier::OpenCVRectifierCPU>(camera_info);
 #endif
 
     int width = camera_info.width; 
@@ -319,12 +320,12 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
         // // camera_transport_pub_.publish(*img, *ci);
         g_time_logger.stopRecording("camera_info");
 
-        // g_time_logger.startRecording("rectify");
-        // auto rect_img = correction_->correct(*img);
-        // g_time_logger.stopRecording("rectify");
+        g_time_logger.startRecording("rectify");
+        auto rect_img = cv_rectifier_gpu_->rectify(*img);
+        g_time_logger.stopRecording("rectify");
 
         // g_time_logger.startRecording("rectify");
-        // auto rect_img = cv_rectifier_gpu_->correct(*img);
+        // auto rect_img = cv_rectifier_cpu_->rectify(*img);
         // g_time_logger.stopRecording("rectify");
 
         g_time_logger.startRecording("compress");
@@ -345,17 +346,17 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
 
         // TODO: For some reason the colors are inverted...
         // changing format from BGR to RGB doesn't work. Fix this.
-        // g_time_logger.startRecording("compress_rect");
-        // auto compressed_rect_img = jetson_compressor2_->compress(*rect_img, 90);
-        // g_time_logger.stopRecording("compress_rect");
+        g_time_logger.startRecording("compress_rect");
+        auto compressed_rect_img = jetson_compressor2_->compress(*rect_img, 90);
+        g_time_logger.stopRecording("compress_rect");
 
-        // g_time_logger.startRecording("rect_publish");
-        // rect_image_pub_->publish(std::move(rect_img));
-        // g_time_logger.stopRecording("rect_publish");
+        g_time_logger.startRecording("rect_publish");
+        rect_image_pub_->publish(std::move(rect_img));
+        g_time_logger.stopRecording("rect_publish");
 
-        // g_time_logger.startRecording("compress_rect_publish");
-        // compressed_rect_image_pub_->publish(std::move(compressed_rect_img));
-        // g_time_logger.stopRecording("compress_rect_publish");
+        g_time_logger.startRecording("compress_rect_publish");
+        compressed_rect_image_pub_->publish(std::move(compressed_rect_img));
+        g_time_logger.stopRecording("compress_rect_publish");
 
         if (g_time_logger.count("publish") % 100 == 0) {
           g_time_logger.printHistogram();

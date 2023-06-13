@@ -14,14 +14,17 @@ namespace Rectifier {
 class NPPRectifier {
 public:
     NPPRectifier(int width, int height,
-                  Npp32f *map_x, Npp32f *map_y,
+                  const Npp32f *map_x, const Npp32f *map_y,
                   int interpolation = NPPI_INTER_LINEAR);
     NPPRectifier(int width, int height,
-                  double *D, double *K, double *R, double *P,
+                  const double *D, const double *K,
+                  const double *R, const double *P,
+                  int interpolation = NPPI_INTER_LINEAR);
+    NPPRectifier(const CameraInfo &info,
                   int interpolation = NPPI_INTER_LINEAR);
     ~NPPRectifier();
 
-    Image::UniquePtr correct(const Image &msg);
+    Image::UniquePtr rectify(const Image &msg);
 private:
     Npp32f *pxl_map_x_;
     Npp32f *pxl_map_y_;
@@ -37,7 +40,7 @@ public:
     OpenCVRectifierCPU(const CameraInfo &info);
     ~OpenCVRectifierCPU();
 
-    Image::UniquePtr correct(const Image &msg);
+    Image::UniquePtr rectify(const Image &msg);
 private:
     cv::Mat map_x_;
     cv::Mat map_y_;
@@ -50,7 +53,7 @@ public:
     OpenCVRectifierGPU(const CameraInfo &info);
     ~OpenCVRectifierGPU();
 
-    Image::UniquePtr correct(const Image &msg);
+    Image::UniquePtr rectify(const Image &msg);
 private:
     cv::cuda::GpuMat map_x_;
     cv::cuda::GpuMat map_y_;
