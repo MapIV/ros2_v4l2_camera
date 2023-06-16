@@ -182,7 +182,7 @@ Image::UniquePtr NPPRectifier::rectify(const Image &msg) {
 
 #ifdef ENABLE_OPENCV
 OpenCVRectifierCPU::OpenCVRectifierCPU(const CameraInfo &info) {
-#if 0
+#if 1
     cv::Mat k(3, 3, CV_32FC1);
     cv::Mat d(1, info.d.size(), CV_32FC1);
 
@@ -197,7 +197,7 @@ OpenCVRectifierCPU::OpenCVRectifierCPU(const CameraInfo &info) {
         cv::Size(info.width, info.height),
         CV_32FC1,
         map_x_, map_y_);
-#elif
+#else
     float *map_x = new float[info.width * info.height];
     float *map_y = new float[info.width * info.height];
 
@@ -235,25 +235,39 @@ Image::UniquePtr OpenCVRectifierCPU::rectify(const Image &msg) {
 
 #ifdef ENABLE_OPENCV_CUDA
 OpenCVRectifierGPU::OpenCVRectifierGPU(const CameraInfo &info) {
-#if 0
-    cv::Mat k(3, 3, CV_32FC1);
-    cv::Mat d(1, 5, CV_32FC1);
+#if 1
+    cv::Mat camera_intrinsics(3, 3, CV_64F);
+    cv::Mat distortion_coefficients(1, 5, CV_64F);
 
-    k = cv::Mat(3, 3, CV_32FC1, (void *)info.k.data());
-    d = cv::Mat(1, info.d.size(), CV_32FC1, (void *)info.d.data());
+    // k = cv::Mat(3, 3, CV_32FC1, (void *)info.k.data());
+    // d = cv::Mat(1, info.d.size(), CV_32FC1, (void *)info.d.data());
+
+    for (int row = 0; row < 3; row++) {
+        for (int col = 0; col < 3; col++) {
+            camera_intrinsics.at<double>(row, col) = info.k[row * 3 + col];
+        }
+    }
+
+    for (int col = 0; col < 5; col++) {
+        distortion_coefficients.at<double>(col) = info.d[col];
+    }
+
+
+    std::cout << camera_intrinsics << std::endl;
+    std::cout << distortion_coefficients << std::endl;
 
     cv::Mat m1;
     cv::Mat m2;
-    cv::initUndistortRectifyMap(k,
-        d,
+    cv::initUndistortRectifyMap(camera_intrinsics,
+        distortion_coefficients,
         cv::Mat(),
-        k,
+        camera_intrinsics,
         cv::Size(info.width, info.height),
         CV_32FC1,
         m1, m2);
-#elif
     map_x_ = cv::cuda::GpuMat(m1);
     map_y_ = cv::cuda::GpuMat(m2);
+#else
     float *map_x = new float[info.width * info.height];
     float *map_y = new float[info.width * info.height];
 
@@ -270,6 +284,29 @@ OpenCVRectifierGPU::OpenCVRectifierGPU(const CameraInfo &info) {
 OpenCVRectifierGPU::~OpenCVRectifierGPU() {}
 
 Image::UniquePtr OpenCVRectifierGPU::rectify(const Image &msg) {
+#if 1
+    Image::UniquePtr result = std::make_unique<Image>();
+    result->header = msg.header;
+    result->height = msg.height;
+    result->width = msg.width;
+    result->encoding = msg.encoding;
+    result->is_bigendian = msg.is_bigendian;
+    result->step = msg.step;
+
+    result->data.resize(msg.data.size());
+
+    cv::Mat src(msg.height, msg.width, CV_8UC3, (void *)msg.data.data());
+    cv::cuda::GpuMat d_src = cv::cuda::GpuMat(src);
+    cv::cuda::GpuMat d_dst = cv::cuda::GpuMat(cv::Size(msg.width, msg.height), src.type());
+
+    cv::cuda::remap(d_src, d_dst, map_x_, map_y_, cv::INTER_LINEAR, cv::BORDER_CONSTANT);
+
+    // copy back to result
+    cv::Mat dst(msg.height, msg.width, CV_8UC3, (void *)result->data.data());
+    d_dst.download(dst);
+
+    return result;
+#elif 0
     auto image = cv_bridge::toCvCopy(msg);
     cv::cuda::GpuMat image_gpu(image->image);
     cv::cuda::GpuMat image_gpu_rect(cv::Size(image->image.rows, 
@@ -282,17 +319,6 @@ Image::UniquePtr OpenCVRectifierGPU::rectify(const Image &msg) {
       cv::BORDER_CONSTANT);
     cv::Mat image_rect = cv::Mat(image_gpu_rect);
 
-    // Image::UniquePtr result = std::make_unique<Image>();
-    // result->header = msg.header;
-    // result->height = msg.height;
-    // result->width = msg.width;
-    // result->encoding = msg.encoding;
-    // result->is_bigendian = msg.is_bigendian;
-    // result->step = msg.step;
-
-    // result->data.resize(msg.data.size());
-    // memcpy(result->data.data(), image_rect.data, msg.data.size());
-
     cv_bridge::CvImage cv_image;
     cv_image.header = msg.header;
     cv_image.encoding = msg.encoding;
@@ -300,6 +326,24 @@ Image::UniquePtr OpenCVRectifierGPU::rectify(const Image &msg) {
 
     // TODO: Fix this evil hack
     return std::make_unique<Image>(*cv_image.toImageMsg());
+#else
+    Image::UniquePtr result = std::make_unique<Image>();
+    result->header = msg.header;
+    result->height = msg.height;
+    result->width = msg.width;
+    result->encoding = msg.encoding;
+    result->is_bigendian = msg.is_bigendian;
+    result->step = msg.step;
+
+    result->data.resize(msg.data.size());
+
+    cv::Mat src(msg.height, msg.width, CV_8UC3, (void *)msg.data.data());
+    cv::Mat dst(msg.height, msg.width, CV_8UC3, (void *)result->data.data());
+
+    cv::remap(src, dst, map_x_, map_y_, cv::INTER_LINEAR);
+
+    return result;
+#endif
 }
 #endif
 
