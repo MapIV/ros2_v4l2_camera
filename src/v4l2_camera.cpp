@@ -201,12 +201,12 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
     "test/image_raw", qos);
 
   // TODO: Proper naming
-  rect_image_pub_ = this->create_publisher<sensor_msgs::msg::Image>(
-    "test/image_rect", qos);
-  compressed_image_pub_ = this->create_publisher<sensor_msgs::msg::CompressedImage>(
-    "test/image_raw/compressed", qos);
-  compressed_rect_image_pub_ = this->create_publisher<sensor_msgs::msg::CompressedImage>(
-    "test/image_rect/compressed", qos);
+  // rect_image_pub_ = this->create_publisher<sensor_msgs::msg::Image>(
+  //   "test/image_rect", qos);
+  // compressed_image_pub_ = this->create_publisher<sensor_msgs::msg::CompressedImage>(
+  //   "test/image_raw/compressed", qos);
+  // compressed_rect_image_pub_ = this->create_publisher<sensor_msgs::msg::CompressedImage>(
+  //   "test/image_rect/compressed", qos);
 
   info_pub_ = this->create_publisher<sensor_msgs::msg::CameraInfo>(
     "test/camera_info", qos);
@@ -253,7 +253,7 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
     cv_rectifier_gpu_ = std::make_shared<Rectifier::OpenCVRectifierGPU>(camera_info);
 #endif
 #ifdef ENABLE_OPENCV
-    // cv_rectifier_cpu_ = std::make_shared<Rectifier::OpenCVRectifierCPU>(camera_info);
+    cv_rectifier_cpu_ = std::make_shared<Rectifier::OpenCVRectifierCPU>(camera_info);
 #endif
 
     int width = camera_info.width; 
@@ -320,17 +320,30 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
         // // camera_transport_pub_.publish(*img, *ci);
         g_time_logger.stopRecording("camera_info");
 
-        g_time_logger.startRecording("rectify");
-        auto rect_img = cv_rectifier_gpu_->rectify(*img);
-        g_time_logger.stopRecording("rectify");
-
         // g_time_logger.startRecording("rectify");
-        // auto rect_img = cv_rectifier_cpu_->rectify(*img);
+        // auto rect_img = cv_rectifier_gpu_->rectify(*img);
         // g_time_logger.stopRecording("rectify");
 
-        g_time_logger.startRecording("compress");
-        auto compressed_img = jetson_compressor_->compress(*img, 30);
-        g_time_logger.stopRecording("compress");
+        // g_time_logger.startRecording("compress");
+        // auto compressed_img = jetson_compressor_->compress(*img, 60);
+        // g_time_logger.stopRecording("compress");
+        // std::future<sensor_msgs::msg::Image::UniquePtr> rect_img_future;
+        // rect_img_future = std::async(std::launch::async, [this, &img]() -> sensor_msgs::msg::Image::UniquePtr {
+        //   g_time_logger.startRecording("rectify");
+        //   auto rect_img = cv_rectifier_cpu_->rectify(*img);
+        //   g_time_logger.stopRecording("rectify");
+        //   return rect_img;
+        // });
+        // std::future<sensor_msgs::msg::CompressedImage::UniquePtr> compressed_img_future;
+        // compressed_img_future = std::async(std::launch::async, [this, &img]() -> sensor_msgs::msg::CompressedImage::UniquePtr {
+        //   g_time_logger.startRecording("compress");
+        //   auto compressed_img = jetson_compressor_->compress(*img, 60);
+        //   g_time_logger.stopRecording("compress");
+        //   return compressed_img;
+        // });
+
+        // auto rect_img = rect_img_future.get();
+        // auto compressed_img = compressed_img_future.get();
 
         g_time_logger.startRecording("publish");
         image_pub_->publish(std::move(img));
@@ -340,23 +353,23 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
         info_pub_->publish(std::move(ci));
         g_time_logger.stopRecording("camera_info_publish");
 
-        g_time_logger.startRecording("compress_publish");
-        compressed_image_pub_->publish(std::move(compressed_img));
-        g_time_logger.stopRecording("compress_publish");
+        // g_time_logger.startRecording("compress_publish");
+        // compressed_image_pub_->publish(std::move(compressed_img));
+        // g_time_logger.stopRecording("compress_publish");
 
         // TODO: For some reason the colors are inverted...
         // changing format from BGR to RGB doesn't work. Fix this.
-        g_time_logger.startRecording("compress_rect");
-        auto compressed_rect_img = jetson_compressor2_->compress(*rect_img, 90);
-        g_time_logger.stopRecording("compress_rect");
+        // g_time_logger.startRecording("compress_rect");
+        // auto compressed_rect_img = jetson_compressor2_->compress(*rect_img, 60);
+        // g_time_logger.stopRecording("compress_rect");
 
-        g_time_logger.startRecording("rect_publish");
-        rect_image_pub_->publish(std::move(rect_img));
-        g_time_logger.stopRecording("rect_publish");
+        // g_time_logger.startRecording("rect_publish");
+        // rect_image_pub_->publish(std::move(rect_img));
+        // g_time_logger.stopRecording("rect_publish");
 
-        g_time_logger.startRecording("compress_rect_publish");
-        compressed_rect_image_pub_->publish(std::move(compressed_rect_img));
-        g_time_logger.stopRecording("compress_rect_publish");
+        // g_time_logger.startRecording("compress_rect_publish");
+        // compressed_rect_image_pub_->publish(std::move(compressed_rect_img));
+        // g_time_logger.stopRecording("compress_rect_publish");
 
         if (g_time_logger.count("publish") % 100 == 0) {
           g_time_logger.printHistogram();
