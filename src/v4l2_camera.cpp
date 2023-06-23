@@ -194,11 +194,11 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   }
   
   const auto qos = use_sensor_data_qos ? rclcpp::SensorDataQoS() : rclcpp::QoS(10);
-  // camera_transport_pub_ = image_transport::create_camera_publisher(this, "image_raw",
-  //                                                                  qos.get_rmw_qos_profile());
+  camera_transport_pub_ = image_transport::create_camera_publisher(this, "image_raw",
+                                                                   qos.get_rmw_qos_profile());
 
-  image_pub_ = this->create_publisher<sensor_msgs::msg::Image>(
-    "test/image_raw", qos);
+  // image_pub_ = this->create_publisher<sensor_msgs::msg::Image>(
+  //   "test/image_raw", qos);
 
   // TODO: Proper naming
   // rect_image_pub_ = this->create_publisher<sensor_msgs::msg::Image>(
@@ -245,6 +245,7 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
     return;
   }
 
+  #if 0
   {
     // TODO: Move this to inside NPPRectifier
     auto camera_info = cinfo_->getCameraInfo();
@@ -265,12 +266,7 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
 
     npp_rectifier_ = std::make_shared<Rectifier::NPPRectifier>(width, height, D, K, R, P);
   }
-
-  // TODO: This is too ugly
-#ifdef ENABLE_JETSON
-  jetson_compressor_ = std::make_shared<JpegCompressor::JetsonCompressor>("raw_comp");
-  jetson_compressor2_ = std::make_shared<JpegCompressor::JetsonCompressor>("rect_comp");
-#endif
+  #endif
 
   // Start capture thread
   capture_thread_ = std::thread{
@@ -386,46 +382,6 @@ V4L2Camera::~V4L2Camera()
   if (capture_thread_.joinable()) {
     capture_thread_.join();
   }
-}
-
-// Publish rectified image (and its compressed version) when
-// the camera image is received
-void V4L2Camera::rectifier_callback(const sensor_msgs::msg::Image::SharedPtr msg)
-{
-  // g_time_logger.startRecording("rectify");
-  // auto rect_img = correction_->correct(msg);
-  // g_time_logger.stopRecording("rectify");
-
-  // g_time_logger.startRecording("compress_rect");
-  // auto compressed_rect_img = jetson_compressor2_->compress(msg, 30);
-  // g_time_logger.stopRecording("compress_rect");
-  // g_time_logger.startRecording("compress_rect_publish");
-  // compressed_rect_image_pub_->publish(std::move(compressed_rect_img));
-  // g_time_logger.stopRecording("compress_rect_publish");
-
-  // g_time_logger.startRecording("rect_publish");
-  // rect_image_pub_->publish(std::move(rect_img));
-  // g_time_logger.stopRecording("rect_publish");
-}
-
-void V4L2Camera::compressor_callback(const sensor_msgs::msg::Image::SharedPtr msg)
-{
-  // g_time_logger.startRecording("compress");
-  // auto compressed_img = jetson_compressor_->compress(msg, 30);
-  // g_time_logger.stopRecording("compress");
-  // g_time_logger.startRecording("compress_publish");
-  // compressed_image_pub_->publish(std::move(compressed_img));
-  // g_time_logger.stopRecording("compress_publish");
-}
-
-void V4L2Camera::rect_compressor_callback(const sensor_msgs::msg::Image::SharedPtr msg)
-{
-  // g_time_logger.startRecording("compress_rect");
-  // auto compressed_rect_img = jetson_compressor2_->compress(msg, 30);
-  // g_time_logger.stopRecording("compress_rect");
-  // g_time_logger.startRecording("compress_rect_publish");
-  // compressed_rect_image_pub_->publish(std::move(compressed_rect_img));
-  // g_time_logger.stopRecording("compress_rect_publish");
 }
 
 void V4L2Camera::createParameters()
