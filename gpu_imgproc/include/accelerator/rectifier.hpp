@@ -16,12 +16,9 @@ public:
     NPPRectifier(int width, int height,
                   const Npp32f *map_x, const Npp32f *map_y,
                   int interpolation = NPPI_INTER_LINEAR);
-    NPPRectifier(int width, int height,
-                  const double *D, const double *K,
-                  const double *R, const double *P,
-                  int interpolation = NPPI_INTER_LINEAR);
     NPPRectifier(const CameraInfo &info,
-                  int interpolation = NPPI_INTER_LINEAR);
+                  int interpolation = NPPI_INTER_LINEAR,
+                  bool use_opencv_map = false);
     ~NPPRectifier();
 
     Image::UniquePtr rectify(const Image &msg);

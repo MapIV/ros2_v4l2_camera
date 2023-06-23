@@ -22,15 +22,18 @@ GpuImgProc::GpuImgProc(const rclcpp::NodeOptions & options)
     img_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
         "/sensing/camera/test/image_raw", 10,
         [this](const sensor_msgs::msg::Image::SharedPtr msg) {
+            static int count = 0;
             // RCLCPP_INFO(this->get_logger(), "Received image");
-
 
             std::future<void> rectified_msg;
             if (npp_rectifier_) {
                 rectified_msg =
                     std::async(std::launch::async, [this, msg]() {
-                        auto rect_img = npp_rectifier_->rectify(*msg);
-                        auto rect_comp_img = rect_compressor_->compress(*rect_img);
+                        // auto rect_img = npp_rectifier_->rectify(*msg);
+                        // save_image(*rect_img, "/home/nvidia/rectified" + std::to_string(count++) + ".png");
+                        // auto rect_img = cv_cpu_rectifier_->rectify(*msg);
+                        auto rect_img = cv_gpu_rectifier_->rectify(*msg);
+                        auto rect_comp_img = rect_compressor_->compress(*rect_img, 60);
                         rectified_pub_->publish(std::move(rect_img));
                         rect_compressed_pub_->publish(std::move(rect_comp_img));
                     });
@@ -38,7 +41,7 @@ GpuImgProc::GpuImgProc(const rclcpp::NodeOptions & options)
 
             std::future<void> compressed_msg =
                 std::async(std::launch::async, [this, msg]() {
-                    compressed_pub_->publish(std::move(raw_compressor_->compress(*msg)));
+                    compressed_pub_->publish(std::move(raw_compressor_->compress(*msg, 60)));
                 });
             
             if (npp_rectifier_) {
@@ -53,7 +56,12 @@ GpuImgProc::GpuImgProc(const rclcpp::NodeOptions & options)
             // RCLCPP_INFO(this->get_logger(), "Received camera info");
 
             if (!npp_rectifier_) {
-                npp_rectifier_ = std::make_shared<Rectifier::NPPRectifier>(*msg);
+                npp_rectifier_ = std::make_shared<Rectifier::NPPRectifier>(*msg, true);
+                cv_cpu_rectifier_ = std::make_shared<Rectifier::OpenCVRectifierCPU>(*msg);
+                cv_gpu_rectifier_ = std::make_shared<Rectifier::OpenCVRectifierGPU>(*msg);
+
+                // unsubscribe
+                info_sub_.reset();
             }
         });
 }

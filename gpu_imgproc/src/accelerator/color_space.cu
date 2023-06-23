@@ -158,6 +158,39 @@ __global__ static void BGRToYUVKernel(
   (static_cast<size_t>(y / 2)) + x / 2) = RGBToV<uint8_t, uint8_t>(r, g, b);
 }
 
+template<class YUVUnitx2>
+__global__ static void RGBToYUVKernel(
+  uint8_t * input, uint8_t * output, int yuv_pitch, int width, int height)
+{
+  int x = (threadIdx.x + blockIdx.x * blockDim.x) * 2;
+  int y = (threadIdx.y + blockIdx.y * blockDim.y) * 2;
+  if (x + 1 >= width || y + 1 >= height) {
+    return;
+  }
+
+  uint8_t * src = input + x * 3 + y * width * 3;
+
+  uint8_t * int2a = src;
+  uint8_t * int2b = src + width * 3;
+
+  uint8_t r = (int2a[0] + int2a[3] + int2b[0] + int2b[3]) / 4,
+    g = (int2a[1] + int2a[4] + int2b[1] + int2b[4]) / 4,
+    b = (int2a[2] + int2a[5] + int2b[2] + int2b[5]) / 4;
+
+  uint8_t * dst = output + x + y * width;
+
+  dst[0] = RGBToY<uint8_t, uint8_t>(int2a[0 + 0], int2a[0 + 1], int2a[0 + 2]);
+  dst[1] = RGBToY<uint8_t, uint8_t>(int2a[1 * 3 + 0], int2a[1 * 3 + 1], int2a[1 * 3 + 2]);
+  dst[width] = RGBToY<uint8_t, uint8_t>(int2b[0 + 0], int2b[0 + 1], int2b[0 + 2]);
+  dst[width + 1] = RGBToY<uint8_t, uint8_t>(int2b[1 * 3 + 0], int2b[1 * 3 + 1], int2b[1 * 3 + 2]);
+  *(output + width * height +
+  static_cast<size_t>(width / 2) * (static_cast<size_t>(y / 2)) + x / 2) =
+    RGBToU<uint8_t, uint8_t>(r, g, b);
+  *(output + width * height + static_cast<size_t>(width / 2) * static_cast<size_t>(height / 2) +
+  static_cast<size_t>(width / 2) *
+  (static_cast<size_t>(y / 2)) + x / 2) = RGBToV<uint8_t, uint8_t>(r, g, b);
+}
+
 cudaError_t cudaBGRToYUV420(uint8_t * input, uint8_t * output, int width, int height, int matrix)
 {
   if (!input) {
@@ -170,6 +203,20 @@ cudaError_t cudaBGRToYUV420(uint8_t * input, uint8_t * output, int width, int he
     (input, output, 4 * width, width, height);
 
   return cudaGetLastError();
-// }
+}
 
-}  // namespace jetson_encoder_compressed_image_transport
+cudaError_t cudaRGBToYUV420(uint8_t * input, uint8_t * output, int width, int height, int matrix)
+{
+  if (!input) {
+    return cudaErrorInvalidDevicePointer;
+  }
+
+  setMatRGB2YUV(matrix);
+  RGBToYUVKernel<ushort2>
+    << < dim3((width + 63) / 32 / 2, (height + 3) / 2 / 2), dim3(32, 2) >> >
+    (input, output, 4 * width, width, height);
+
+  return cudaGetLastError();
+}
+
+// }  // namespace jetson_encoder_compressed_image_transport

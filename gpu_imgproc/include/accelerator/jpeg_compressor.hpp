@@ -15,41 +15,7 @@ namespace JpegCompressor {
 using Image = sensor_msgs::msg::Image;
 using CompressedImage = sensor_msgs::msg::CompressedImage;
 
-// class JpegCompressor {
-// public:
-//     JpegCompressor();
-//     ~JpegCompressor();
-
-//     CompressedImage::UniquePtr compress(Image::UniquePtr &msg);
-// private:
-//     NvJPEGEncoder *jpegenc;
-
-//     uint32_t in_width;
-//     uint32_t in_height;
-//     uint32_t in_pixfmt;
-
-//     bool got_error;
-//     bool use_fd;
-
-//     bool perf;
-
-//     uint32_t crop_left;
-//     uint32_t crop_top;
-//     uint32_t crop_width;
-//     uint32_t crop_height;
-//     int  stress_test;
-//     bool scaled_encode;
-//     uint32_t scale_width;
-//     uint32_t scale_height;
-//     int quality;
-// };
-
-enum Sampling {
-    YUV420,
-    YUV422,
-};
-
-enum ImageFormat {
+enum class ImageFormat {
     RGB,
     BGR
 };
@@ -59,7 +25,7 @@ public:
     CPUCompressor();
     ~CPUCompressor();
 
-    CompressedImage::UniquePtr compress(const Image &msg, int quality = 90,int format = TJPF_RGB, int sampling = TJ_420);
+    CompressedImage::UniquePtr compress(const Image &msg, int quality = 90, int format = TJPF_RGB, int sampling = TJ_420);
 private:
     tjhandle handle_;
     unsigned char *jpegBuf_;
@@ -73,7 +39,7 @@ public:
     JetsonCompressor(std::string name);
     ~JetsonCompressor();
 
-    CompressedImage::UniquePtr compress(const Image &msg, int quality = 90, int format = BGR, int sampling = YUV420);
+    CompressedImage::UniquePtr compress(const Image &msg, int quality = 90, ImageFormat format = ImageFormat::RGB);
 private:
     NvJPEGEncoder *encoder_;
     size_t image_size{};

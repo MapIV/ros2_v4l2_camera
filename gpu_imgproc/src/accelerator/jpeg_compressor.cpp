@@ -21,7 +21,7 @@ CPUCompressor::~CPUCompressor() {
     tjDestroy(handle_);
 }
 
-CompressedImage::UniquePtr CPUCompressor::compress(const Image &msg, int quality, int sampling, int format) {
+CompressedImage::UniquePtr CPUCompressor::compress(const Image &msg, int quality, int format, int sampling) {
     CompressedImage::UniquePtr compressed_msg = std::make_unique<CompressedImage>();
     compressed_msg->header = msg.header;
     compressed_msg->format = "jpeg";
@@ -60,7 +60,7 @@ JetsonCompressor::~JetsonCompressor() {
 }
 
 #ifdef ENABLE_JETSON
-CompressedImage::UniquePtr JetsonCompressor::compress(const Image &msg, int quality, int sampling, int format) {
+CompressedImage::UniquePtr JetsonCompressor::compress(const Image &msg, int quality, ImageFormat format) {
     CompressedImage::UniquePtr compressed_msg = std::make_unique<CompressedImage>();
     compressed_msg->header = msg.header;
     compressed_msg->format = "jpeg";
@@ -81,24 +81,13 @@ CompressedImage::UniquePtr JetsonCompressor::compress(const Image &msg, int qual
 
     cuda::memory::copy(dev_image.get(), img.data(), img.size());
 
-#if 1
-    if (format == RGB) {
-        TEST_ERROR(cudaRGB8ToBGR8(dev_image.get(), width, height, 1) != cudaSuccess,
-                   "failed to convert rgb8 to bgr8");
-    }
-
-    TEST_ERROR(cudaBGRToYUV420(dev_image.get(), dev_yuv.get(), width, height) !=
-               cudaSuccess, "failed to convert bgr8 to yuv420");
-#else
-    if (format == RGB) {
-        TEST_ERROR(nppiBGRToYUV420_8u_AC4P3R(dev_image.get(), width * 3,
-                                             dev_yuv.get(), width * 3, 
-                   "failed to convert rgb8 to yuv420");
+    if (format == ImageFormat::RGB) {
+        TEST_ERROR(cudaRGBToYUV420(dev_image.get(), dev_yuv.get(), width, height) !=
+                cudaSuccess, "failed to convert rgb8 to yuv420");
     } else {
         TEST_ERROR(cudaBGRToYUV420(dev_image.get(), dev_yuv.get(), width, height) !=
                 cudaSuccess, "failed to convert bgr8 to yuv420");
     }
-#endif
 
     cuda::memory::copy(host_yuv.get(), dev_yuv.get(), yuv_size);
 
