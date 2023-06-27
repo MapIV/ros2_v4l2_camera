@@ -3,22 +3,36 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <nppdefs.h>
-#include <opencv2/core/cuda.hpp>
+
+#ifdef ENABLE_OPENCV
 #include <opencv2/core.hpp>
+#endif
+#ifdef ENABLE_OPENCV_CUDA
+#include <opencv2/core/cuda.hpp>
+#endif
 
 using CameraInfo = sensor_msgs::msg::CameraInfo;
 using Image = sensor_msgs::msg::Image;
 
 namespace Rectifier {
 
+enum class Implementation {
+    NPP,
+    OpenCV_CPU,
+    OpenCV_GPU
+};
+
+enum class MappingImpl {
+    NPP,
+    OpenCV
+};
+
 class NPPRectifier {
 public:
     NPPRectifier(int width, int height,
-                  const Npp32f *map_x, const Npp32f *map_y,
-                  int interpolation = NPPI_INTER_LINEAR);
+                 const Npp32f *map_x, const Npp32f *map_y);
     NPPRectifier(const CameraInfo &info,
-                  int interpolation = NPPI_INTER_LINEAR,
-                  bool use_opencv_map = false);
+                 MappingImpl impl = MappingImpl::NPP);
     ~NPPRectifier();
 
     Image::UniquePtr rectify(const Image &msg);
@@ -34,7 +48,8 @@ private:
 #ifdef ENABLE_OPENCV
 class OpenCVRectifierCPU {
 public:
-    OpenCVRectifierCPU(const CameraInfo &info);
+    OpenCVRectifierCPU(const CameraInfo &info,
+                       MappingImpl impl = MappingImpl::OpenCV);
     ~OpenCVRectifierCPU();
 
     Image::UniquePtr rectify(const Image &msg);
@@ -47,7 +62,8 @@ private:
 #ifdef ENABLE_OPENCV_CUDA
 class OpenCVRectifierGPU {
 public:
-    OpenCVRectifierGPU(const CameraInfo &info);
+    OpenCVRectifierGPU(const CameraInfo &info,
+                       MappingImpl impl = MappingImpl::OpenCV);
     ~OpenCVRectifierGPU();
 
     Image::UniquePtr rectify(const Image &msg);

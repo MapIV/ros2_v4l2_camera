@@ -97,8 +97,8 @@ void compute_maps_opencv(const CameraInfo &info, float *map_x, float *map_y) {
 #endif
 
 NPPRectifier::NPPRectifier(int width, int height,
-                             const Npp32f *map_x, const Npp32f *map_y,
-                             int interpolation) : pxl_map_x_(nullptr), pxl_map_y_(nullptr) {
+                           const Npp32f *map_x, const Npp32f *map_y)
+    : pxl_map_x_(nullptr), pxl_map_y_(nullptr) {
     cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking);
 
     pxl_map_x_ = nppiMalloc_32f_C1(width, height, &pxl_map_x_step_);
@@ -113,11 +113,9 @@ NPPRectifier::NPPRectifier(int width, int height,
     }
     CHECK_CUDA_STATUS(cudaMemcpy2D(pxl_map_x_, pxl_map_x_step_, map_x, width * sizeof(float), width * sizeof(float), height, cudaMemcpyHostToDevice));
     CHECK_CUDA_STATUS(cudaMemcpy2D(pxl_map_y_, pxl_map_y_step_, map_y, width * sizeof(float), width * sizeof(float), height, cudaMemcpyHostToDevice));
-    interpolation_ = interpolation;
 }
 
-NPPRectifier::NPPRectifier(const CameraInfo& info, int interpolation, bool use_opencv_map)
-    : interpolation_(interpolation) {
+NPPRectifier::NPPRectifier(const CameraInfo& info, MappingImpl impl) {
     cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking);
 
     nppSetStream(stream_);
@@ -139,7 +137,7 @@ NPPRectifier::NPPRectifier(const CameraInfo& info, int interpolation, bool use_o
     float *map_y = new float[info.width * info.height];
 
 #ifdef ENABLE_OPENCV
-    if (use_opencv_map)
+    if (impl == MappingImpl::OpenCV)
         compute_maps_opencv(info, map_x, map_y);
     else
 #endif
@@ -149,8 +147,6 @@ NPPRectifier::NPPRectifier(const CameraInfo& info, int interpolation, bool use_o
 
     CHECK_CUDA_STATUS(cudaMemcpy2D(pxl_map_x_, pxl_map_x_step_, map_x, info.width * sizeof(float), info.width * sizeof(float), info.height, cudaMemcpyHostToDevice));
     CHECK_CUDA_STATUS(cudaMemcpy2D(pxl_map_y_, pxl_map_y_step_, map_y, info.width * sizeof(float), info.width * sizeof(float), info.height, cudaMemcpyHostToDevice));
-
-    interpolation_ = interpolation;
 
     delete[] map_x;
     delete[] map_y;
@@ -212,29 +208,16 @@ Image::UniquePtr NPPRectifier::rectify(const Image &msg) {
 }
 
 #ifdef ENABLE_OPENCV
-OpenCVRectifierCPU::OpenCVRectifierCPU(const CameraInfo &info) {
-    cv::Mat camera_intrinsics(3, 3, CV_64F);
-    cv::Mat distortion_coefficients(1, 5, CV_64F);
+OpenCVRectifierCPU::OpenCVRectifierCPU(const CameraInfo &info, MappingImpl impl) {
+    map_x_ = cv::Mat(info.height, info.width, CV_32FC1);
+    map_y_ = cv::Mat(info.height, info.width, CV_32FC1);
 
-    for (int row=0; row<3; row++) {
-        for (int col=0; col<3; col++) {
-            camera_intrinsics.at<double>(row, col) = info.k[row * 3 + col];
-        }
-    }
-
-    for (int col=0; col<5; col++) {
-        distortion_coefficients.at<double>(col) = info.d[col];
-    }
-
-    cv::Mat m1;
-    cv::Mat m2;
-    cv::initUndistortRectifyMap(camera_intrinsics,
-        distortion_coefficients,
-        cv::Mat(),
-        camera_intrinsics,
-        cv::Size(info.width, info.height),
-        CV_32FC1,
-        map_x_, map_y_);
+    if (impl == MappingImpl::OpenCV)
+        compute_maps_opencv(info, map_x_.ptr<float>(), map_y_.ptr<float>());
+    else
+        compute_maps(info.width, info.height,
+                     info.d.data(), info.p.data(),
+                     map_x_.ptr<float>(), map_y_.ptr<float>());
 }
 
 OpenCVRectifierCPU::~OpenCVRectifierCPU() {}
@@ -260,31 +243,19 @@ Image::UniquePtr OpenCVRectifierCPU::rectify(const Image &msg) {
 #endif
 
 #ifdef ENABLE_OPENCV_CUDA
-OpenCVRectifierGPU::OpenCVRectifierGPU(const CameraInfo &info) {
-    cv::Mat camera_intrinsics(3, 3, CV_64F);
-    cv::Mat distortion_coefficients(1, 5, CV_64F);
+OpenCVRectifierGPU::OpenCVRectifierGPU(const CameraInfo &info, MappingImpl impl) {
+    cv::Mat map_x(info.height, info.width, CV_32FC1);
+    cv::Mat map_y(info.height, info.width, CV_32FC1);
 
-    for (int row=0; row<3; row++) {
-        for (int col=0; col<3; col++) {
-            camera_intrinsics.at<double>(row, col) = info.k[row * 3 + col];
-        }
-    }
+    if (impl == MappingImpl::OpenCV)
+        compute_maps_opencv(info, map_x.ptr<float>(), map_y.ptr<float>());
+    else
+        compute_maps(info.width, info.height,
+                     info.d.data(), info.p.data(),
+                     map_x.ptr<float>(), map_y.ptr<float>());
 
-    for (int col=0; col<5; col++) {
-        distortion_coefficients.at<double>(col) = info.d[col];
-    }
-
-    cv::Mat m1;
-    cv::Mat m2;
-    cv::initUndistortRectifyMap(camera_intrinsics,
-        distortion_coefficients,
-        cv::Mat(),
-        camera_intrinsics,
-        cv::Size(info.width, info.height),
-        CV_32FC1,
-        m1, m2);
-    map_x_ = cv::cuda::GpuMat(m1);
-    map_y_ = cv::cuda::GpuMat(m2);
+    map_x_ = cv::cuda::GpuMat(map_x);
+    map_y_ = cv::cuda::GpuMat(map_y);
 }
 
 OpenCVRectifierGPU::~OpenCVRectifierGPU() {}

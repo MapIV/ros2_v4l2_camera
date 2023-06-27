@@ -27,6 +27,8 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr rectified_pub_;
     rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_pub_;
     rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr rect_compressed_pub_;
+
+    Rectifier::Implementation rectifier_impl_;
 };
 
 
