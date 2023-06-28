@@ -35,8 +35,6 @@
 #ifdef ENABLE_CUDA
 #include <nppdefs.h>
 #include <nppi_support_functions.h>
-#include "acceleration/jpeg_compressor.hpp"
-#include "acceleration/rectifier.hpp"
 #endif
 
 
@@ -100,13 +98,7 @@ private:
 
   // Publisher used for intra process comm
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
-  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr rect_image_pub_;
-  rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_image_pub_;
-  rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_rect_image_pub_;
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub_;
-  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr rectifier_sub_;
-  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr compressor_sub_;
-  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr rect_compressor_sub_;
 
   // Publisher used for inter process comm
   image_transport::CameraPublisher camera_transport_pub_;
@@ -134,24 +126,6 @@ private:
   std::shared_ptr<GPUMemoryManager> src_dev_;
   std::shared_ptr<GPUMemoryManager> dst_dev_;
 #endif
-
-#ifdef ENABLE_CUDA  
-  JpegCompressor::CPUCompressor cpu_compressor_;
-  // TODO: Use ENABLE_CUDA guards where it matters
-  std::shared_ptr<JpegCompressor::JetsonCompressor> jetson_compressor_;
-  std::shared_ptr<JpegCompressor::JetsonCompressor> jetson_compressor2_;
-  std::shared_ptr<Rectifier::NPPRectifier> npp_rectifier_;
-#ifdef ENABLE_OPENCV
-  std::shared_ptr<Rectifier::OpenCVRectifierCPU> cv_rectifier_cpu_;
-#endif
-#ifdef ENABLE_OPENCV_CUDA
-  std::shared_ptr<Rectifier::OpenCVRectifierGPU> cv_rectifier_gpu_;
-#endif
-#endif
-
-  void rectifier_callback(const sensor_msgs::msg::Image::SharedPtr msg);
-  void compressor_callback(const sensor_msgs::msg::Image::SharedPtr msg);
-  void rect_compressor_callback(const sensor_msgs::msg::Image::SharedPtr msg);
 
   void createParameters();
   bool handleParameter(rclcpp::Parameter const & param);

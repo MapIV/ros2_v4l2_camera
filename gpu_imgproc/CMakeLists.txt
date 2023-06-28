@@ -1,7 +1,16 @@
 cmake_minimum_required(VERSION 3.5)
 project(gpu_imgproc LANGUAGES CUDA CXX)
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+
 find_package(ament_cmake_auto REQUIRED)
+find_package (LibJpegTurbo)
+
+if (${LibJpegTurbo_FOUND})
+  message("LibJpegTurbo_FOUND")
+  add_definitions(-DTURBOJPEG_AVAILABLE)
+endif ()
+
 ament_auto_find_build_dependencies()
 
 # Default to C++14
@@ -19,6 +28,7 @@ find_package(OpenCV REQUIRED PATHS "/usr/local/")
 if (EXISTS "/etc/nv_tegra_release")
   set(JETSON TRUE)
   message(STATUS "Jetson platform detected")
+  add_definitions(-DJETSON_AVAILABLE)
 else ()
   set(JETSON FALSE)
   message(STATUS "Non-Jetson platform detected")
@@ -111,36 +121,34 @@ if (JETSON)
       ENABLE_OPENCV_CUDA
     )
   endif()
+  include_directories(
+          include
+          ${CUDA_INCLUDE_DIRS}
+          ${OpenCV_INCLUDE_DIRS}
+  )
+
+  ament_auto_add_library(gpu_imgproc SHARED
+          src/gpu_imgproc.cpp
+          )
+
+  target_link_libraries(gpu_imgproc
+          ${CUDA_LIBRARIES}
+          ${OpenCV_LIBRARIES}
+          rectifier
+          jpeg_compressor
+          )
+
+  rclcpp_components_register_node(gpu_imgproc
+          PLUGIN "GpuImgProc"
+          EXECUTABLE gpu_imgproc_node
+          )
+
+  install(
+          TARGETS gpu_imgproc
+          ARCHIVE DESTINATION lib
+          LIBRARY DESTINATION lib
+          RUNTIME DESTINATION bin)
 endif()
-
-include_directories(
-  include
-  ${CUDA_INCLUDE_DIRS}
-  ${OpenCV_INCLUDE_DIRS}
-)
-
-ament_auto_add_library(gpu_imgproc SHARED
-  src/gpu_imgproc.cpp
-)
-
-target_link_libraries(gpu_imgproc
-  ${CUDA_LIBRARIES}
-  ${OpenCV_LIBRARIES}
-  rectifier
-  jpeg_compressor
-  color_space
-)
-
-rclcpp_components_register_node(gpu_imgproc
-  PLUGIN "GpuImgProc"
-  EXECUTABLE gpu_imgproc_node
-)
-
-install(
-  TARGETS color_space
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin)
 
 ament_auto_package(
   INSTALL_TO_SHARE

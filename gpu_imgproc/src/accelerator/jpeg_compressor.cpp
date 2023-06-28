@@ -3,7 +3,6 @@
 #include <nppi_color_conversion.h>
 
 #include "accelerator/jpeg_compressor.hpp"
-#include "accelerator/color_space.hpp"
 
 #define TEST_ERROR(cond, str) if(cond) { \
                                         fprintf(stderr, "%s\n", str); }
@@ -51,6 +50,8 @@ CompressedImage::UniquePtr CPUCompressor::compress(const Image &msg, int quality
     return compressed_msg;
 }
 
+
+#ifdef ENABLE_JETSON
 JetsonCompressor::JetsonCompressor(std::string name) {
     encoder_ = NvJPEGEncoder::createJPEGEncoder(name.c_str());
 }
@@ -59,7 +60,6 @@ JetsonCompressor::~JetsonCompressor() {
     delete encoder_;
 }
 
-#ifdef ENABLE_JETSON
 CompressedImage::UniquePtr JetsonCompressor::compress(const Image &msg, int quality, ImageFormat format) {
     CompressedImage::UniquePtr compressed_msg = std::make_unique<CompressedImage>();
     compressed_msg->header = msg.header;
