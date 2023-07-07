@@ -30,33 +30,30 @@ def launch_setup(context, *args, **kwargs):
                         LaunchConfiguration("image_topic"),
                     ],
                 ),
-                # (
-                #     "image_raw/compressed",
-                #     [
-                #         LaunchConfiguration("camera_name"),
-                #         '/',
-                #         LaunchConfiguration("image_topic"),
-                #         '/compressed',
-                #     ],
-                # ),
-                # (
-                #     "image_raw/compressedDepth",
-                #     [
-                #         LaunchConfiguration("camera_name"),
-                #         '/',
-                #         LaunchConfiguration("image_topic"),
-                #         '/compressedDepth',
-                #     ],
-                # ),
-                # (
-                #     "image_raw/theora",
-                #     [
-                #         LaunchConfiguration("camera_name"),
-                #         '/',
-                #         LaunchConfiguration("image_topic"),
-                #         '/theora',
-                #     ],
-                # ),
+                (
+                    "image_raw/compressed",
+                    [
+                        'ignore/',
+                        LaunchConfiguration("image_topic"),
+                        '/compressed',
+                    ],
+                ),
+                (
+                    "image_raw/compressedDepth",
+                    [
+                        'ignore/',
+                        LaunchConfiguration("image_topic"),
+                        '/compressedDepth',
+                    ],
+                ),
+                (
+                    "image_raw/theora",
+                    [
+                        'ignore/',
+                        LaunchConfiguration("image_topic"),
+                        '/theora',
+                    ],
+                ),
                 (
                     "camera_info",
                     [

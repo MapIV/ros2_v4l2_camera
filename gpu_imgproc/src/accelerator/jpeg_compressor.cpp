@@ -1,14 +1,35 @@
 #include <cstdio>
 #include <cstring>
-#include <nppi_color_conversion.h>
+
+#include <rclcpp/rclcpp.hpp>
 
 #include "accelerator/jpeg_compressor.hpp"
+
+#if defined(JETSON_AVAILABLE) || defined(NVJPEG_AVAILABLE)
+#include <nppi_color_conversion.h>
+#endif
 
 #define TEST_ERROR(cond, str) if(cond) { \
                                         fprintf(stderr, "%s\n", str); }
 
+#define CHECK_CUDA(status) \
+    if (status != cudaSuccess) { \
+        RCLCPP_ERROR(rclcpp::get_logger("v4l2_camera"), "CUDA error: %s (%s:%d)", cudaGetErrorName(status), __FILE__, __LINE__); \
+    }
+
+#define CHECK_NVJPEG(call)                                                                      \
+    {                                                                                           \
+        nvjpegStatus_t _e = (call);                                                             \
+        if (_e != NVJPEG_STATUS_SUCCESS) {                                                      \
+            RCLCPP_ERROR(rclcpp::get_logger("v4l2_camera"), "NVJPEG failure: '#%d' at %s:%d",   \
+                         _e, __FILE__, __LINE__);                                               \
+            exit(1);                                                                            \
+        }                                                                                       \
+    }
+
 namespace JpegCompressor {
 
+#ifdef TURBOJPEG_AVAILABLE
 CPUCompressor::CPUCompressor()
     : jpegBuf_(nullptr), size_(0) {
     handle_ = tjInitCompress();
@@ -49,9 +70,9 @@ CompressedImage::UniquePtr CPUCompressor::compress(const Image &msg, int quality
 
     return compressed_msg;
 }
+#endif
 
-
-#ifdef ENABLE_JETSON
+#ifdef JETSON_AVAILABLE
 JetsonCompressor::JetsonCompressor(std::string name) {
     encoder_ = NvJPEGEncoder::createJPEGEncoder(name.c_str());
 }
@@ -117,6 +138,70 @@ CompressedImage::UniquePtr JetsonCompressor::compress(const Image &msg, int qual
     compressed_msg->data.resize(out_buf_size);
     
     return compressed_msg;
+}
+#endif
+
+#ifdef NVJPEG_AVAILABLE
+NVJPEGCompressor::NVJPEGCompressor() {
+    CHECK_CUDA(cudaStreamCreate(&stream_));
+    // CHECK_NVJPEG(nvjpegCreateEx(NVJPEG_BACKEND_DEFAULT, NULL, NULL, NVJPEG_FLAGS_DEFAULT, &handle_))
+    CHECK_NVJPEG(nvjpegCreateSimple(&handle_));
+    CHECK_NVJPEG(nvjpegEncoderStateCreate(handle_, &state_, stream_));
+    CHECK_NVJPEG(nvjpegEncoderParamsCreate(handle_, &params_, stream_));
+
+    nvjpegEncoderParamsSetSamplingFactors(params_, NVJPEG_CSS_420, stream_);
+
+    std::memset(&nv_image_, 0, sizeof(nv_image_));
+}
+
+NVJPEGCompressor::~NVJPEGCompressor() {
+    CHECK_NVJPEG(nvjpegEncoderParamsDestroy(params_));
+    CHECK_NVJPEG(nvjpegEncoderStateDestroy(state_));
+    CHECK_NVJPEG(nvjpegDestroy(handle_));
+    CHECK_CUDA(cudaStreamDestroy(stream_));
+}
+
+CompressedImage::UniquePtr NVJPEGCompressor::compress(const Image &msg, int quality, ImageFormat format) {
+    #warning TODO: implement format conversion or get rid of the parameter
+    CompressedImage::UniquePtr compressed_msg = std::make_unique<CompressedImage>();
+    compressed_msg->header = msg.header;
+    compressed_msg->format = "jpeg";
+
+    nvjpegEncoderParamsSetQuality(params_, quality, stream_);
+
+    setNVImage(msg);
+    CHECK_NVJPEG(nvjpegEncodeImage(handle_, state_, params_, &nv_image_, NVJPEG_INPUT_RGBI,
+                                   msg.width, msg.height, stream_));
+    
+    unsigned long out_buf_size = 0;
+
+    CHECK_NVJPEG(nvjpegEncodeRetrieveBitstream(handle_, state_, NULL, &out_buf_size, stream_));
+    compressed_msg->data.resize(out_buf_size);
+    CHECK_NVJPEG(nvjpegEncodeRetrieveBitstream(handle_, state_, compressed_msg->data.data(),
+                                               &out_buf_size, stream_));
+
+    CHECK_CUDA(cudaStreamSynchronize(stream_));
+
+    return compressed_msg;
+}
+
+void NVJPEGCompressor::setNVImage(const Image &msg) {
+    unsigned char *p = nullptr;
+    CHECK_CUDA(cudaMallocAsync((void **)&p, msg.data.size(), stream_));
+    if (nv_image_.channel[0] != NULL) {
+        CHECK_CUDA(cudaFreeAsync(nv_image_.channel[0], stream_));
+    }
+
+    CHECK_CUDA(cudaMemcpyAsync(p, msg.data.data(), msg.data.size(), cudaMemcpyHostToDevice, stream_));
+
+    // int channels = image.size() / (image.width * image.height);
+    int channels = 3;
+
+    std::memset(&nv_image_, 0, sizeof(nv_image_));
+
+    // Assuming RGBI/BGRI
+    nv_image_.pitch[0] = msg.width * channels;
+    nv_image_.channel[0] = p;
 }
 #endif
 

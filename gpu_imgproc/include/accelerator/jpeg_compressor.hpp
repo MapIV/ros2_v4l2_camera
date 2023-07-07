@@ -8,12 +8,41 @@
 #include <turbojpeg.h>
 #endif
 
-#ifdef ENABLE_JETSON
+#ifdef JETSON_AVAILABLE
 #include <NvJpegEncoder.h>
 #include <cuda/api.hpp>
+#endif
+
+#ifdef NVJPEG_AVAILABLE
+#include <nvjpeg.h>
+#endif
 
 class NvJPEGEncoder;
 
+namespace JpegCompressor {
+using Image = sensor_msgs::msg::Image;
+using CompressedImage = sensor_msgs::msg::CompressedImage;
+
+enum class ImageFormat {
+    RGB,
+    BGR
+};
+
+#ifdef TURBOJPEG_AVAILABLE
+class CPUCompressor {
+public:
+    CPUCompressor();
+    ~CPUCompressor();
+
+    CompressedImage::UniquePtr compress(const Image &msg, int quality = 90, int format = TJPF_RGB, int sampling = TJ_420);
+private:
+    tjhandle handle_;
+    unsigned char *jpegBuf_;
+    unsigned long size_;
+};
+#endif
+
+#ifdef JETSON_AVAILABLE
 class JetsonCompressor {
 public:
     JetsonCompressor(std::string name);
@@ -30,25 +59,25 @@ private:
 };
 #endif
 
-namespace JpegCompressor {
-using Image = sensor_msgs::msg::Image;
-using CompressedImage = sensor_msgs::msg::CompressedImage;
-
-enum class ImageFormat {
-    RGB,
-    BGR
-};
-
-class CPUCompressor {
+#ifdef NVJPEG_AVAILABLE
+class NVJPEGCompressor {
 public:
-    CPUCompressor();
-    ~CPUCompressor();
+    NVJPEGCompressor();
+    ~NVJPEGCompressor();
 
-    CompressedImage::UniquePtr compress(const Image &msg, int quality = 90, int format = TJPF_RGB, int sampling = TJ_420);
+    CompressedImage::UniquePtr compress(const Image &msg, int quality = 90, ImageFormat format = ImageFormat::RGB);
 private:
-    tjhandle handle_;
-    unsigned char *jpegBuf_;
-    unsigned long size_;
-};
+    // void setNVJPEGParams(int quality, ImageFormat format);
+    void setNVImage(const Image &msg);
+
+    cudaStream_t stream_;
+    nvjpegHandle_t handle_;
+    nvjpegEncoderState_t state_;
+    nvjpegEncoderParams_t params_;
+    nvjpegInputFormat_t input_format_;
+    nvjpegChromaSubsampling_t subsampling_;
+    nvjpegImage_t nv_image_;
+}; 
+#endif
 
 } // namespace JpegCompressor

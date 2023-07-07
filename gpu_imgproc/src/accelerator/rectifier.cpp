@@ -1,17 +1,19 @@
 #include "accelerator/rectifier.hpp"
 #include <rclcpp/rclcpp.hpp>
 
+#if NPP_AVAILABLE
 #include <npp.h>
 #include <nppi_data_exchange_and_initialization.h>
 #include <nppi_geometry_transforms.h>
 #include <nppi_support_functions.h>
+#endif
 
-#ifdef ENABLE_OPENCV
+#ifdef OPENCV_AVAILABLE
 #include <image_geometry/pinhole_camera_model.h>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/imgcodecs.hpp>
 
-#ifdef ENABLE_OPENCV_CUDA
+#ifdef OPENCV_CUDA_AVAILABLE
 // #include <opencv2/cudafeatures2d.hpp>
 // #include <opencv2/cudaimgproc.hpp>
 #include <opencv2/cudafilters.hpp>
@@ -24,12 +26,12 @@
 #endif
 
 
-#define CHECK_NPP_STATUS(status) \
+#define CHECK_NPP(status) \
     if (status != NPP_SUCCESS) { \
         RCLCPP_ERROR(rclcpp::get_logger("v4l2_camera"), "NPP error: %d (%s:%d)", status, __FILE__, __LINE__); \
     }
 
-#define CHECK_CUDA_STATUS(status) \
+#define CHECK_CUDA(status) \
     if (status != cudaSuccess) { \
         RCLCPP_ERROR(rclcpp::get_logger("v4l2_camera"), "CUDA error: %s (%s:%d)", cudaGetErrorName(status), __FILE__, __LINE__); \
     }
@@ -69,7 +71,7 @@ void compute_maps(int width, int height, const double *D, const double *P,
     }
 }
 
-#ifdef ENABLE_OPENCV
+#ifdef OPENCV_AVAILABLE
 void compute_maps_opencv(const CameraInfo &info, float *map_x, float *map_y) {
     cv::Mat camera_intrinsics(3, 3, CV_64F);
     cv::Mat distortion_coefficients(1, 5, CV_64F);
@@ -96,6 +98,7 @@ void compute_maps_opencv(const CameraInfo &info, float *map_x, float *map_y) {
 }
 #endif
 
+#if NPP_AVAILABLE
 NPPRectifier::NPPRectifier(int width, int height,
                            const Npp32f *map_x, const Npp32f *map_y)
     : pxl_map_x_(nullptr), pxl_map_y_(nullptr) {
@@ -111,8 +114,8 @@ NPPRectifier::NPPRectifier(int width, int height,
         RCLCPP_ERROR(rclcpp::get_logger("v4l2_camera"), "Failed to allocate GPU memory");
         return;
     }
-    CHECK_CUDA_STATUS(cudaMemcpy2D(pxl_map_x_, pxl_map_x_step_, map_x, width * sizeof(float), width * sizeof(float), height, cudaMemcpyHostToDevice));
-    CHECK_CUDA_STATUS(cudaMemcpy2D(pxl_map_y_, pxl_map_y_step_, map_y, width * sizeof(float), width * sizeof(float), height, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy2D(pxl_map_x_, pxl_map_x_step_, map_x, width * sizeof(float), width * sizeof(float), height, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy2D(pxl_map_y_, pxl_map_y_step_, map_y, width * sizeof(float), width * sizeof(float), height, cudaMemcpyHostToDevice));
 }
 
 NPPRectifier::NPPRectifier(const CameraInfo& info, MappingImpl impl) {
@@ -131,12 +134,14 @@ NPPRectifier::NPPRectifier(const CameraInfo& info, MappingImpl impl) {
         return;
     }
 
+    std::cout << "Rectifying image with " << info.width << "x" << info.height << " pixels" << std::endl;
+
     // Create rectification map
     // TODO: Verify this works
     float *map_x = new float[info.width * info.height];
     float *map_y = new float[info.width * info.height];
 
-#ifdef ENABLE_OPENCV
+#ifdef OPENCV_AVAILABLE
     if (impl == MappingImpl::OpenCV)
         compute_maps_opencv(info, map_x, map_y);
     else
@@ -145,8 +150,10 @@ NPPRectifier::NPPRectifier(const CameraInfo& info, MappingImpl impl) {
                  info.d.data(), info.p.data(),
                  map_x, map_y);
 
-    CHECK_CUDA_STATUS(cudaMemcpy2D(pxl_map_x_, pxl_map_x_step_, map_x, info.width * sizeof(float), info.width * sizeof(float), info.height, cudaMemcpyHostToDevice));
-    CHECK_CUDA_STATUS(cudaMemcpy2D(pxl_map_y_, pxl_map_y_step_, map_y, info.width * sizeof(float), info.width * sizeof(float), info.height, cudaMemcpyHostToDevice));
+    std::cout << "Copying rectification map to GPU" << std::endl;
+
+    CHECK_CUDA(cudaMemcpy2D(pxl_map_x_, pxl_map_x_step_, map_x, info.width * sizeof(float), info.width * sizeof(float), info.height, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy2D(pxl_map_y_, pxl_map_y_step_, map_y, info.width * sizeof(float), info.width * sizeof(float), info.height, cudaMemcpyHostToDevice));
 
     delete[] map_x;
     delete[] map_y;
@@ -184,16 +191,16 @@ Image::UniquePtr NPPRectifier::rectify(const Image &msg) {
     Npp8u *src = nppiMalloc_8u_C3(msg.width, msg.height, &src_step);
     Npp8u *dst = nppiMalloc_8u_C3(msg.width, msg.height, &dst_step);
 
-    CHECK_CUDA_STATUS(cudaMemcpy2D(src, src_step, msg.data.data(), msg.step, msg.width * 3, msg.height, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy2D(src, src_step, msg.data.data(), msg.step, msg.width * 3, msg.height, cudaMemcpyHostToDevice));
 
     NppiInterpolationMode interpolation = NPPI_INTER_LINEAR;
 
-    CHECK_NPP_STATUS(nppiRemap_8u_C3R(
+    CHECK_NPP(nppiRemap_8u_C3R(
         src, src_size, src_step, src_roi,
         pxl_map_x_, pxl_map_x_step_, pxl_map_y_, pxl_map_y_step_,
         dst, dst_step, dst_roi_size, interpolation));
 
-    CHECK_CUDA_STATUS(cudaMemcpy2D(result->data.data(), result->step, dst, dst_step, msg.width * 3, msg.height, cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy2D(result->data.data(), result->step, dst, dst_step, msg.width * 3, msg.height, cudaMemcpyDeviceToHost));
 
     // cv::Mat image(msg.height, msg.width, CV_8UC3, result->data.data(), result->step);
     // cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
@@ -206,8 +213,9 @@ Image::UniquePtr NPPRectifier::rectify(const Image &msg) {
 
     return result;
 }
+#endif
 
-#ifdef ENABLE_OPENCV
+#ifdef OPENCV_AVAILABLE
 OpenCVRectifierCPU::OpenCVRectifierCPU(const CameraInfo &info, MappingImpl impl) {
     map_x_ = cv::Mat(info.height, info.width, CV_32FC1);
     map_y_ = cv::Mat(info.height, info.width, CV_32FC1);
@@ -242,7 +250,7 @@ Image::UniquePtr OpenCVRectifierCPU::rectify(const Image &msg) {
 }
 #endif
 
-#ifdef ENABLE_OPENCV_CUDA
+#ifdef OPENCV_CUDA_AVAILABLE
 OpenCVRectifierGPU::OpenCVRectifierGPU(const CameraInfo &info, MappingImpl impl) {
     cv::Mat map_x(info.height, info.width, CV_32FC1);
     cv::Mat map_y(info.height, info.width, CV_32FC1);

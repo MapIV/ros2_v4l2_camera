@@ -2,13 +2,16 @@
 
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
-#include <nppdefs.h>
 
-#ifdef ENABLE_OPENCV
+#ifdef OPENCV_AVAILABLE
 #include <opencv2/core.hpp>
 #endif
-#ifdef ENABLE_OPENCV_CUDA
+#ifdef OPENCV_CUDA_AVAILABLE
 #include <opencv2/core/cuda.hpp>
+#endif
+
+#if NPP_AVAILABLE
+#include <nppdefs.h>
 #endif
 
 using CameraInfo = sensor_msgs::msg::CameraInfo;
@@ -27,6 +30,7 @@ enum class MappingImpl {
     OpenCV
 };
 
+#if NPP_AVAILABLE
 class NPPRectifier {
 public:
     NPPRectifier(int width, int height,
@@ -44,8 +48,9 @@ private:
     int interpolation_;
     cudaStream_t stream_;
 };
+#endif
 
-#ifdef ENABLE_OPENCV
+#ifdef OPENCV_AVAILABLE
 class OpenCVRectifierCPU {
 public:
     OpenCVRectifierCPU(const CameraInfo &info,
@@ -59,7 +64,7 @@ private:
 };
 #endif
 
-#ifdef ENABLE_OPENCV_CUDA
+#ifdef OPENCV_CUDA_AVAILABLE
 class OpenCVRectifierGPU {
 public:
     OpenCVRectifierGPU(const CameraInfo &info,
