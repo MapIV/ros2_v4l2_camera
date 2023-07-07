@@ -168,7 +168,7 @@ else()
   target_include_directories(jpeg_compressor PUBLIC
     ${CUDA_INCLUDE_DIR}
     ${CUDA_NPP_INCLUDES}
-    ${LibJpegTurbo_LIBRARY}
+    ${LibJpegTurbo_INCLUDE_DIRS}
     ${NVJPEG_INCLUDE_DIRS}
     # ${CUDART_INCLUDE_DIR}
     # ${CULIBOS_INCLUDE_DIR}

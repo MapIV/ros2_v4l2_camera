@@ -36,7 +36,8 @@ public:
     NPPRectifier(int width, int height,
                  const Npp32f *map_x, const Npp32f *map_y);
     NPPRectifier(const CameraInfo &info,
-                 MappingImpl impl = MappingImpl::NPP);
+                 MappingImpl impl = MappingImpl::NPP,
+                 double alpha = 0.0);
     ~NPPRectifier();
 
     Image::UniquePtr rectify(const Image &msg);
@@ -54,13 +55,16 @@ private:
 class OpenCVRectifierCPU {
 public:
     OpenCVRectifierCPU(const CameraInfo &info,
-                       MappingImpl impl = MappingImpl::OpenCV);
+                       MappingImpl impl = MappingImpl::OpenCV,
+                       double alpha = 0.0);
     ~OpenCVRectifierCPU();
 
     Image::UniquePtr rectify(const Image &msg);
 private:
     cv::Mat map_x_;
     cv::Mat map_y_;
+    cv::Mat camera_intrinsics_;
+    cv::Mat distortion_coeffs_;
 };
 #endif
 
@@ -68,7 +72,8 @@ private:
 class OpenCVRectifierGPU {
 public:
     OpenCVRectifierGPU(const CameraInfo &info,
-                       MappingImpl impl = MappingImpl::OpenCV);
+                       MappingImpl impl = MappingImpl::OpenCV,
+                       double alpha = 0.0);
     ~OpenCVRectifierGPU();
 
     Image::UniquePtr rectify(const Image &msg);

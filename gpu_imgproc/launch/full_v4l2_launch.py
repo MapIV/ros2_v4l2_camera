@@ -33,7 +33,8 @@ def launch_setup(context, *args, **kwargs):
                 (
                     "image_raw/compressed",
                     [
-                        'ignore/',
+                        LaunchConfiguration("camera_name"),
+                        '/',
                         LaunchConfiguration("image_topic"),
                         '/compressed',
                     ],
@@ -41,7 +42,8 @@ def launch_setup(context, *args, **kwargs):
                 (
                     "image_raw/compressedDepth",
                     [
-                        'ignore/',
+                        LaunchConfiguration("camera_name"),
+                        '/',
                         LaunchConfiguration("image_topic"),
                         '/compressedDepth',
                     ],
@@ -49,7 +51,8 @@ def launch_setup(context, *args, **kwargs):
                 (
                     "image_raw/theora",
                     [
-                        'ignore/',
+                        LaunchConfiguration("camera_name"),
+                        '/',
                         LaunchConfiguration("image_topic"),
                         '/theora',
                     ],
@@ -68,96 +71,98 @@ def launch_setup(context, *args, **kwargs):
                     "camera_info_url": LaunchConfiguration("camera_info_url"),
                     "use_sensor_data_qos": LaunchConfiguration("use_sensor_data_qos"),
                     "publish_rate": LaunchConfiguration("publish_rate"),
+                    "use_image_transport": LaunchConfiguration("use_image_transport"),
                 },
             ],
             extra_arguments=[{"use_intra_process_comms": LaunchConfiguration("use_intra_process")}],
-        ),
-        ComposableNode(
-            package="gpu_imgproc",
-            plugin="GpuImgProc",
-            name=['gpu_imgproc_', LaunchConfiguration("camera_name")],
-            namespace=LaunchConfiguration("v4l2_camera_namespace"),
-            remappings = [
-                (
-                    "image_raw",
-                    [
-                        LaunchConfiguration("camera_name"),
-                        '/',
-                        LaunchConfiguration("image_topic"),
-                    ],
-                ),
-                (
-                    "image_raw/compressed",
-                    [
-                        LaunchConfiguration("camera_name"),
-                        '/',
-                        LaunchConfiguration("image_topic"),
-                        '/compressed',
-                    ],
-                ),
-                (
-                    "image_raw/compressedDepth",
-                    [
-                        LaunchConfiguration("camera_name"),
-                        '/',
-                        LaunchConfiguration("image_topic"),
-                        '/compressedDepth',
-                    ],
-                ),
-                (
-                    "image_raw/theora",
-                    [
-                        LaunchConfiguration("camera_name"),
-                        '/',
-                        LaunchConfiguration("image_topic"),
-                        '/theora',
-                    ],
-                ),
-                (
-                    "image_rect",
-                    [
-                        LaunchConfiguration("camera_name"),
-                        '/image_rect'
-                    ],
-                ),
-                (
-                    "image_rect/compressed",
-                    [
-                        LaunchConfiguration("camera_name"),
-                        '/image_rect/compressed'
-                    ],
-                ),
-                (
-                    "image_rect/compressedDepth",
-                    [
-                        LaunchConfiguration("camera_name"),
-                        '/image_rect/compressedDepth',
-                    ],
-                ),
-                (
-                    "image_rect/theora",
-                    [
-                        LaunchConfiguration("camera_name"),
-                        '/image_rect/theora',
-                    ],
-                ),
-                (
-                    "camera_info",
-                    [
-                        LaunchConfiguration("camera_name"),
-                        '/camera_info'
-                    ],
-                ),
-            ],
-            parameters=[
-                {
-                    "rect_impl": LaunchConfiguration("rect_impl"),
-                    "use_opencv_map_init": LaunchConfiguration("use_opencv_map_init"),
-                }
-            ],
-            extra_arguments=[{"use_intra_process_comms": LaunchConfiguration("use_intra_process")}],
-        ),
-    ]
+    )]
+    if LaunchConfigurationEquals("use_image_transport", "False")._predicate_func(context):
+        composable_nodes.append(ComposableNode(
+        package="gpu_imgproc",
+        plugin="GpuImgProc",
+        name=['gpu_imgproc_', LaunchConfiguration("camera_name")],
+        namespace=LaunchConfiguration("v4l2_camera_namespace"),
+        remappings = [
+            (
+                "image_raw",
+                [
+                    LaunchConfiguration("camera_name"),
+                    '/',
+                    LaunchConfiguration("image_topic"),
+                ],
+            ),
+            (
+                "image_raw/compressed",
+                [
+                    LaunchConfiguration("camera_name"),
+                    '/',
+                    LaunchConfiguration("image_topic"),
+                    '/compressed',
+                ],
+            ),
+            (
+                "image_raw/compressedDepth",
+                [
+                    LaunchConfiguration("camera_name"),
+                    '/',
+                    LaunchConfiguration("image_topic"),
+                    '/compressedDepth',
+                ],
+            ),
+            (
+                "image_raw/theora",
+                [
+                    LaunchConfiguration("camera_name"),
+                    '/',
+                    LaunchConfiguration("image_topic"),
+                    '/theora',
+                ],
+            ),
+            (
+                "image_rect",
+                [
+                    LaunchConfiguration("camera_name"),
+                    '/image_rect'
+                ],
+            ),
+            (
+                "image_rect/compressed",
+                [
+                    LaunchConfiguration("camera_name"),
+                    '/image_rect/compressed'
+                ],
+            ),
+            (
+                "image_rect/compressedDepth",
+                [
+                    LaunchConfiguration("camera_name"),
+                    '/image_rect/compressedDepth',
+                ],
+            ),
+            (
+                "image_rect/theora",
+                [
+                    LaunchConfiguration("camera_name"),
+                    '/image_rect/theora',
+                ],
+            ),
+            (
+                "camera_info",
+                [
+                    LaunchConfiguration("camera_name"),
+                    '/camera_info'
+                ],
+            ),
+        ],
+        parameters=[
+            {
+                "rect_impl": LaunchConfiguration("rect_impl"),
+                "use_opencv_map_init": LaunchConfiguration("use_opencv_map_init"),
+                "alpha": LaunchConfiguration("alpha"),
+            }
+        ],
+        extra_arguments=[{"use_intra_process_comms": LaunchConfiguration("use_intra_process")}],
+        ))
 
     # If an existing container is not provided, start container and load nodes into it
     v4l2_camera_container = ComposableNodeContainer(
@@ -212,6 +217,10 @@ def generate_launch_description():
                    description='rectification implementation. possible values: npp, opencv_cpu, opencv_gpu')
     add_launch_arg('use_opencv_map_init', 'True',
                    description='flag to use opencv map initialization. uses npp map initialization if false')
+    add_launch_arg('use_image_transport', 'True',
+                   description='whether to use image transport or not')
+    add_launch_arg('alpha', '0.0',
+                   description='')
 
     return LaunchDescription(
         [

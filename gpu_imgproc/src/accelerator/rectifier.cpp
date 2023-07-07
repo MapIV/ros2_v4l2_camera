@@ -38,8 +38,10 @@
 
 namespace Rectifier {
 
-void compute_maps(int width, int height, const double *D, const double *P,
+static void compute_maps(int width, int height, const double *D, const double *P,
                   float *map_x, float *map_y) {
+    RCLCPP_WARN(rclcpp::get_logger("v4l2_camera"), "No support for alpha in non-OpenCV mapping");
+
     double fx = P[0];
     double fy = P[5];
     double cx = P[2];
@@ -72,7 +74,7 @@ void compute_maps(int width, int height, const double *D, const double *P,
 }
 
 #ifdef OPENCV_AVAILABLE
-void compute_maps_opencv(const CameraInfo &info, float *map_x, float *map_y) {
+static void compute_maps_opencv(const CameraInfo &info, float *map_x, float *map_y, double alpha = 0.0) {
     cv::Mat camera_intrinsics(3, 3, CV_64F);
     cv::Mat distortion_coefficients(1, 5, CV_64F);
 
@@ -86,12 +88,18 @@ void compute_maps_opencv(const CameraInfo &info, float *map_x, float *map_y) {
         distortion_coefficients.at<double>(col) = info.d[col];
     }
 
+    cv::Mat new_intrinsics = cv::getOptimalNewCameraMatrix(camera_intrinsics,
+        distortion_coefficients,
+        cv::Size(info.width, info.height),
+        alpha);
+
     cv::Mat m1(info.height, info.width, CV_32FC1, map_x);
     cv::Mat m2(info.height, info.width, CV_32FC1, map_y);
+    
     cv::initUndistortRectifyMap(camera_intrinsics,
         distortion_coefficients,
         cv::Mat(),
-        camera_intrinsics,
+        new_intrinsics,
         cv::Size(info.width, info.height),
         CV_32FC1,
         m1, m2);
@@ -118,7 +126,7 @@ NPPRectifier::NPPRectifier(int width, int height,
     CHECK_CUDA(cudaMemcpy2D(pxl_map_y_, pxl_map_y_step_, map_y, width * sizeof(float), width * sizeof(float), height, cudaMemcpyHostToDevice));
 }
 
-NPPRectifier::NPPRectifier(const CameraInfo& info, MappingImpl impl) {
+NPPRectifier::NPPRectifier(const CameraInfo& info, MappingImpl impl, double alpha) {
     cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking);
 
     nppSetStream(stream_);
@@ -143,7 +151,7 @@ NPPRectifier::NPPRectifier(const CameraInfo& info, MappingImpl impl) {
 
 #ifdef OPENCV_AVAILABLE
     if (impl == MappingImpl::OpenCV)
-        compute_maps_opencv(info, map_x, map_y);
+        compute_maps_opencv(info, map_x, map_y, alpha);
     else
 #endif
     compute_maps(info.width, info.height,
@@ -216,12 +224,12 @@ Image::UniquePtr NPPRectifier::rectify(const Image &msg) {
 #endif
 
 #ifdef OPENCV_AVAILABLE
-OpenCVRectifierCPU::OpenCVRectifierCPU(const CameraInfo &info, MappingImpl impl) {
+OpenCVRectifierCPU::OpenCVRectifierCPU(const CameraInfo &info, MappingImpl impl, double alpha) {
     map_x_ = cv::Mat(info.height, info.width, CV_32FC1);
     map_y_ = cv::Mat(info.height, info.width, CV_32FC1);
 
     if (impl == MappingImpl::OpenCV)
-        compute_maps_opencv(info, map_x_.ptr<float>(), map_y_.ptr<float>());
+        compute_maps_opencv(info, map_x_.ptr<float>(), map_y_.ptr<float>(), alpha);
     else
         compute_maps(info.width, info.height,
                      info.d.data(), info.p.data(),
@@ -251,12 +259,12 @@ Image::UniquePtr OpenCVRectifierCPU::rectify(const Image &msg) {
 #endif
 
 #ifdef OPENCV_CUDA_AVAILABLE
-OpenCVRectifierGPU::OpenCVRectifierGPU(const CameraInfo &info, MappingImpl impl) {
+OpenCVRectifierGPU::OpenCVRectifierGPU(const CameraInfo &info, MappingImpl impl, double alpha) {
     cv::Mat map_x(info.height, info.width, CV_32FC1);
     cv::Mat map_y(info.height, info.width, CV_32FC1);
 
     if (impl == MappingImpl::OpenCV)
-        compute_maps_opencv(info, map_x.ptr<float>(), map_y.ptr<float>());
+        compute_maps_opencv(info, map_x.ptr<float>(), map_y.ptr<float>(), alpha);
     else
         compute_maps(info.width, info.height,
                      info.d.data(), info.p.data(),

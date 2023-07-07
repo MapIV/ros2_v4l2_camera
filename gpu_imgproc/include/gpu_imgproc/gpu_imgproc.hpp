@@ -15,6 +15,9 @@ public:
     virtual ~GpuImgProc();
 
 private:
+    void imageCallback(const sensor_msgs::msg::Image::SharedPtr msg);
+    void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg);
+
 #if NPP_AVAILABLE
     std::shared_ptr<Rectifier::NPPRectifier> npp_rectifier_;
 #endif
@@ -43,6 +46,9 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr rect_compressed_pub_;
 
     Rectifier::Implementation rectifier_impl_;
+    Rectifier::MappingImpl mapping_impl_;
+    bool rectifier_active_;
+    double alpha_;
 };
 
 
