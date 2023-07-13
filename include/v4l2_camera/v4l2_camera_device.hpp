@@ -15,8 +15,8 @@
 #ifndef V4L2_CAMERA__V4L2_CAMERA_DEVICE_HPP_
 #define V4L2_CAMERA__V4L2_CAMERA_DEVICE_HPP_
 
-#include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/image.hpp>
+#include <ros/ros.h>
+#include <sensor_msgs/image.hpp>
 
 #include <map>
 #include <string>
@@ -36,7 +36,7 @@ namespace v4l2_camera
 class V4l2CameraDevice
 {
 public:
-  explicit V4l2CameraDevice(std::string device, bool use_v4l2_buffer_timestamps, rclcpp::Duration timestamp_offset_duration);
+  explicit V4l2CameraDevice(std::string device, bool use_v4l2_buffer_timestamps, ros::Duration timestamp_offset_duration);
 
   bool open();
   bool start();
@@ -100,7 +100,7 @@ private:
   std::string device_;
   int fd_;
   bool use_v4l2_buffer_timestamps_;
-  rclcpp::Duration timestamp_offset_;
+  ros::Duration timestamp_offset_;
   uint64_t tsc_offset_;
 
   v4l2_capability capabilities_;

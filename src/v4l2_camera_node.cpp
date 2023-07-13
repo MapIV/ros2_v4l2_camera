@@ -18,13 +18,14 @@
 
 int main(int argc, char ** argv)
 {
-  rclcpp::init(argc, argv);
+  ros::init(argc, argv, "v4l2_camera");
 
-  auto node = std::make_shared<v4l2_camera::V4L2Camera>(rclcpp::NodeOptions{});
+  ros::NodeHandle nh;
+  ros::NodeHandle nh_priv("~");
 
-  rclcpp::spin(node);
-  rclcpp::shutdown();
-  node = nullptr;
+  v4l2_camera::V4L2Camera n(nh, nh_priv);
 
+  ros::spin();
+  
   return 0;
 }

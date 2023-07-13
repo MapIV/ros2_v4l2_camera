@@ -14,7 +14,7 @@
 
 #include "v4l2_camera/v4l2_camera_device.hpp"
 
-#include <rclcpp/rclcpp.hpp>
+#include <ros/ros.h>
 #include <sensor_msgs/image_encodings.hpp>
 
 #include <fcntl.h>
@@ -32,9 +32,9 @@
 #include "v4l2_camera/fourcc.hpp"
 
 using v4l2_camera::V4l2CameraDevice;
-using sensor_msgs::msg::Image;
+using sensor_msgs::Image;
 
-V4l2CameraDevice::V4l2CameraDevice(std::string device, bool use_v4l2_buffer_timestamps, rclcpp::Duration timestamp_offset_duration)
+V4l2CameraDevice::V4l2CameraDevice(std::string device, bool use_v4l2_buffer_timestamps, ros::Duration timestamp_offset_duration)
 : device_{std::move(device)}, use_v4l2_buffer_timestamps_{use_v4l2_buffer_timestamps}, timestamp_offset_{timestamp_offset_duration}
 {
 }
@@ -49,7 +49,7 @@ bool V4l2CameraDevice::open()
   if (fd_ < 0) {
     auto msg = std::ostringstream{};
     msg << "Failed opening device " << device_ << ": " << strerror(errno) << " (" << errno << ")";
-    RCLCPP_ERROR(rclcpp::get_logger("v4l2_camera"), "%s", msg.str().c_str());
+    ROS_ERROR("%s", msg.str().c_str());
     return false;
   }
 
@@ -59,28 +59,14 @@ bool V4l2CameraDevice::open()
   auto canRead = capabilities_.capabilities & V4L2_CAP_READWRITE;
   auto canStream = capabilities_.capabilities & V4L2_CAP_STREAMING;
 
-  RCLCPP_INFO(
-    rclcpp::get_logger("v4l2_camera"),
-    "Driver: %s", capabilities_.driver);
-  RCLCPP_INFO(
-    rclcpp::get_logger("v4l2_camera"),
-    "Version: %s", std::to_string(capabilities_.version).c_str());
-  RCLCPP_INFO(
-    rclcpp::get_logger("v4l2_camera"),
-    "Device: %s", capabilities_.card);
-  RCLCPP_INFO(
-    rclcpp::get_logger("v4l2_camera"),
-    "Location: %s", capabilities_.bus_info);
+  ROS_INFO("Driver: %s", capabilities_.driver);
+  ROS_INFO("Version: %s", std::to_string(capabilities_.version).c_str());
+  ROS_INFO("Device: %s", capabilities_.card);
+  ROS_INFO("Location: %s", capabilities_.bus_info);
 
-  RCLCPP_INFO(
-    rclcpp::get_logger("v4l2_camera"),
-    "Capabilities:");
-  RCLCPP_INFO(
-    rclcpp::get_logger("v4l2_camera"),
-    "  Read/write: %s", (canRead ? "YES" : "NO"));
-  RCLCPP_INFO(
-    rclcpp::get_logger("v4l2_camera"),
-    "  Streaming: %s", (canStream ? "YES" : "NO"));
+  ROS_INFO("Capabilities:");
+  ROS_INFO("  Read/write: %s", (canRead ? "YES" : "NO"));
+  ROS_INFO("  Streaming: %s", (canStream ? "YES" : "NO"));
 
   // Get current data (pixel) format
   auto formatReq = v4l2_format{};
@@ -88,8 +74,7 @@ bool V4l2CameraDevice::open()
   ioctl(fd_, VIDIOC_G_FMT, &formatReq);
   cur_data_format_ = PixelFormat{formatReq.fmt.pix};
 
-  RCLCPP_INFO(
-    rclcpp::get_logger("v4l2_camera"),
+  ROS_INFO(
     "Current pixel format: %s @ %sx%s", FourCC::toString(cur_data_format_.pixelFormat).c_str(),
     std::to_string(cur_data_format_.width).c_str(),
     std::to_string(cur_data_format_.height).c_str());
@@ -102,31 +87,27 @@ bool V4l2CameraDevice::open()
   listControls();
 
   // Log results
-  RCLCPP_INFO(rclcpp::get_logger("v4l2_camera"), "Available pixel formats: ");
+  ROS_INFO("Available pixel formats: ");
   for (auto const & format : image_formats_) {
-    RCLCPP_INFO(
-      rclcpp::get_logger("v4l2_camera"),
-      "  %s - %s", FourCC::toString(format.pixelFormat).c_str(), format.description.c_str());
+    ROS_INFO("  %s - %s", FourCC::toString(format.pixelFormat).c_str(), format.description.c_str());
   }
 
-  RCLCPP_INFO(rclcpp::get_logger("v4l2_camera"), "Available controls: ");
+  ROS_INFO("Available controls: ");
   for (auto const & control : controls_) {
-    RCLCPP_INFO(
-      rclcpp::get_logger("v4l2_camera"),
+    ROS_INFO(
       "  %s (%s) = %s", control.name.c_str(),
       std::to_string(static_cast<unsigned>(control.type)).c_str(),
       std::to_string(getControlValue(control.id)).c_str());
   }
 
   if (timePerFrameSupported()) {
-    RCLCPP_INFO(rclcpp::get_logger("v4l2_camera"), "Time-per-frame support: YES");
-    RCLCPP_INFO(
-      rclcpp::get_logger("v4l2_camera"),
+    ROS_INFO("Time-per-frame support: YES");
+    ROS_INFO(
       "  Current time per frame: %d/%d s",
       capture_parm_.timeperframe.numerator,
       capture_parm_.timeperframe.denominator);
 
-    RCLCPP_INFO(rclcpp::get_logger("v4l2_camera"), "  Available intervals:");
+    ROS_INFO("  Available intervals:");
     for (auto const & kv : frame_intervals_) {
       auto oss = std::ostringstream{};
       oss << FourCC::toString(std::get<0>(kv.first)) << " " << std::get<1>(kv.first) << "x" <<
@@ -134,11 +115,10 @@ bool V4l2CameraDevice::open()
       for (auto const & i : kv.second) {
         oss << " " << i.first << "/" << i.second;
       }
-      RCLCPP_INFO(rclcpp::get_logger("v4l2_camera"), "    %s", oss.str().c_str());
+      ROS_INFO("    %s", oss.str().c_str());
     }
   } else {
-    RCLCPP_INFO(
-      rclcpp::get_logger("v4l2_camera"), "Time-per-frame support: NO");
+    ROS_INFO("Time-per-frame support: NO");
   }
 
   return true;
@@ -146,7 +126,7 @@ bool V4l2CameraDevice::open()
 
 bool V4l2CameraDevice::start()
 {
-  RCLCPP_INFO(rclcpp::get_logger("v4l2_camera"), "Starting camera");
+  ROS_INFO("Starting camera");
   if (!initMemoryMapping()) {
     return false;
   }
@@ -159,8 +139,7 @@ bool V4l2CameraDevice::start()
     buf.index = buffer.index;
 
     if (-1 == ioctl(fd_, VIDIOC_QBUF, &buf)) {
-      RCLCPP_ERROR(
-        rclcpp::get_logger("v4l2_camera"),
+      ROS_ERROR(
         "Buffer failure on capture start: %s (%s)", strerror(errno),
         std::to_string(errno).c_str());
       return false;
@@ -170,8 +149,7 @@ bool V4l2CameraDevice::start()
   // Start stream
   unsigned type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   if (-1 == ioctl(fd_, VIDIOC_STREAMON, &type)) {
-    RCLCPP_ERROR(
-      rclcpp::get_logger("v4l2_camera"),
+    ROS_ERROR(
       "Failed stream start: %s (%s)", strerror(errno),
       std::to_string(errno).c_str());
     return false;
@@ -181,12 +159,11 @@ bool V4l2CameraDevice::start()
 
 bool V4l2CameraDevice::stop()
 {
-  RCLCPP_INFO(rclcpp::get_logger("v4l2_camera"), "Stopping camera");
+  ROS_INFO("Stopping camera");
   // Stop stream
   unsigned type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   if (-1 == ioctl(fd_, VIDIOC_STREAMOFF, &type)) {
-    RCLCPP_ERROR(
-      rclcpp::get_logger("v4l2_camera"),
+    ROS_ERROR(
       "Failed stream stop");
     return false;
   }
@@ -250,8 +227,7 @@ Image::UniquePtr V4l2CameraDevice::capture()
 
   // Dequeue buffer with new image
   if (-1 == ioctl(fd_, VIDIOC_DQBUF, &buf)) {
-    RCLCPP_ERROR(
-      rclcpp::get_logger("v4l2_camera"),
+    ROS_ERROR(
       "Error dequeueing buffer: %s (%s)", strerror(errno),
       std::to_string(errno).c_str());
     return nullptr;
@@ -270,8 +246,7 @@ Image::UniquePtr V4l2CameraDevice::capture()
 
   // Requeue buffer to be reused for new captures
   if (-1 == ioctl(fd_, VIDIOC_QBUF, &buf)) {
-    RCLCPP_ERROR(
-      rclcpp::get_logger("v4l2_camera"),
+    ROS_ERROR(
       "Error re-queueing buffer: %s (%s)", strerror(errno),
       std::to_string(errno).c_str());
     return nullptr;
@@ -290,7 +265,7 @@ Image::UniquePtr V4l2CameraDevice::capture()
   } else if (cur_data_format_.pixelFormat == V4L2_PIX_FMT_GREY) {
     img->encoding = sensor_msgs::image_encodings::MONO8;
   } else {
-    RCLCPP_WARN(rclcpp::get_logger("v4l2_camera"), "Current pixel format is not supported yet");
+    ROS_WARN("Current pixel format is not supported yet");
   }
   img->data.resize(cur_data_format_.imageByteSize);
 
@@ -304,8 +279,7 @@ int32_t V4l2CameraDevice::getControlValue(uint32_t id)
   auto ctrl = v4l2_control{};
   ctrl.id = id;
   if (-1 == ioctl(fd_, VIDIOC_G_CTRL, &ctrl)) {
-    RCLCPP_ERROR(
-      rclcpp::get_logger("v4l2_camera"),
+    ROS_ERROR(
       "Failed getting value for control %s: %s (%s); returning 0!", std::to_string(id).c_str(),
       strerror(errno), std::to_string(errno).c_str());
     return 0;
@@ -322,8 +296,7 @@ bool V4l2CameraDevice::setControlValue(uint32_t id, int32_t value)
     auto control = std::find_if(
       controls_.begin(), controls_.end(),
       [id](Control const & c) {return c.id == id;});
-    RCLCPP_ERROR(
-      rclcpp::get_logger("v4l2_camera"),
+    ROS_ERROR(
       "Failed setting value for control %s to %s: %s (%s)", control->name.c_str(),
       std::to_string(value).c_str(), strerror(errno), std::to_string(errno).c_str());
     return false;
@@ -339,21 +312,19 @@ bool V4l2CameraDevice::requestDataFormat(const PixelFormat & format)
   formatReq.fmt.pix.width = format.width;
   formatReq.fmt.pix.height = format.height;
 
-  RCLCPP_INFO(
-    rclcpp::get_logger("v4l2_camera"),
+  ROS_INFO(
     "Requesting format: %sx%s", std::to_string(format.width).c_str(),
     std::to_string(format.height).c_str());
 
   // Perform request
   if (-1 == ioctl(fd_, VIDIOC_S_FMT, &formatReq)) {
-    RCLCPP_ERROR(
-      rclcpp::get_logger("v4l2_camera"),
+    ROS_ERROR(
       "Failed requesting pixel format: %s (%s)", strerror(errno),
       std::to_string(errno).c_str());
     return false;
   }
 
-  RCLCPP_INFO(rclcpp::get_logger("v4l2_camera"), "Success");
+  ROS_INFO("Success");
   cur_data_format_ = PixelFormat{formatReq.fmt.pix};
   return true;
 }
@@ -361,8 +332,7 @@ bool V4l2CameraDevice::requestDataFormat(const PixelFormat & format)
 bool V4l2CameraDevice::requestTimePerFrame(std::pair<uint32_t, uint32_t> tpf)
 {
   if (!timePerFrameSupported()) {
-    RCLCPP_ERROR(
-      rclcpp::get_logger("v4l2_camera"),
+    ROS_ERROR(
       "Device does not support setting time per frame");
     return false;
   }
@@ -376,8 +346,7 @@ bool V4l2CameraDevice::requestTimePerFrame(std::pair<uint32_t, uint32_t> tpf)
 
   // Perform request
   if (-1 == ioctl(fd_, VIDIOC_S_PARM, &parmReq)) {
-    RCLCPP_ERROR(
-      rclcpp::get_logger("v4l2_camera"),
+    ROS_ERROR(
       "Failed requesting time per frame: %s (%s)", strerror(errno),
       std::to_string(errno).c_str());
     return false;
@@ -386,8 +355,7 @@ bool V4l2CameraDevice::requestTimePerFrame(std::pair<uint32_t, uint32_t> tpf)
   if (parmReq.parm.capture.timeperframe.numerator != tpf.first ||
     parmReq.parm.capture.timeperframe.denominator != tpf.second)
   {
-    RCLCPP_WARN(
-      rclcpp::get_logger("v4l2_camera"),
+    ROS_WARN(
       "Requesting time per frame succeeded, but driver overwrote value: %d/%d",
       parmReq.parm.capture.timeperframe.numerator,
       parmReq.parm.capture.timeperframe.denominator);
@@ -402,8 +370,7 @@ void V4l2CameraDevice::getCaptureParameters()
   struct v4l2_streamparm streamParm;
   streamParm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   if (-1 == ioctl(fd_, VIDIOC_G_PARM, &streamParm)) {
-    RCLCPP_ERROR(
-      rclcpp::get_logger("v4l2_camera"),
+    ROS_ERROR(
       "Failed requesting streaming parameters: %s (%s)", strerror(errno),
       std::to_string(errno).c_str());
     return;
@@ -435,8 +402,7 @@ void V4l2CameraDevice::listImageSizes()
     frmSizeEnum.pixel_format = f.pixelFormat;
 
     if (-1 == ioctl(fd_, VIDIOC_ENUM_FRAMESIZES, &frmSizeEnum)) {
-      RCLCPP_ERROR_STREAM(
-        rclcpp::get_logger("v4l2_camera"),
+      ROS_ERROR_STREAM(
         "Failed listing frame size " << strerror(errno) << " (" << errno << ")");
       continue;
     }
@@ -452,8 +418,7 @@ void V4l2CameraDevice::listImageSizes()
         image_sizes_[f.pixelFormat] = listContinuousImageSizes(frmSizeEnum);
         break;
       default:
-        RCLCPP_WARN_STREAM(
-          rclcpp::get_logger("v4l2_camera"),
+        ROS_WARN_STREAM(
           "Frame size type not supported: " << frmSizeEnum.type);
         continue;
     }
@@ -499,9 +464,7 @@ V4l2CameraDevice::ImageSizesDescription V4l2CameraDevice::listContinuousImageSiz
 void V4l2CameraDevice::listFrameIntervals()
 {
   if (!timePerFrameSupported()) {
-    RCLCPP_WARN(
-      rclcpp::get_logger(
-        "v4l2_camera"), "Time per frame not supported, cannot list intervals");
+    ROS_WARN("Time per frame not supported, cannot list intervals");
     return;
   }
 
@@ -520,15 +483,13 @@ void V4l2CameraDevice::listFrameIntervals()
           frmIvalEnum.height = s.second;
 
           if (-1 == ioctl(fd_, VIDIOC_ENUM_FRAMEINTERVALS, &frmIvalEnum)) {
-            RCLCPP_ERROR_STREAM(
-              rclcpp::get_logger("v4l2_camera"),
+            ROS_ERROR_STREAM(
               "Failed listing frame interval " << strerror(errno) << " (" << errno << ")");
             continue;
           }
 
           if (frmIvalEnum.type != V4L2_FRMIVAL_TYPE_DISCRETE) {
-            RCLCPP_WARN(
-              rclcpp::get_logger("v4l2_camera"),
+            ROS_WARN(
               "Listing of non-discrete frame intervals is not currently supported");
             continue;
           }
@@ -549,8 +510,7 @@ void V4l2CameraDevice::listFrameIntervals()
         break;
 
       default:
-        RCLCPP_WARN(
-          rclcpp::get_logger("v4l2_camera"),
+        ROS_WARN(
           "Listing of frame intervals for non-discrete image sizes is not currently supported");
     }
   }
@@ -611,7 +571,7 @@ bool V4l2CameraDevice::initMemoryMapping()
 
   // Didn't get more than 1 buffer
   if (req.count < 2) {
-    RCLCPP_ERROR(rclcpp::get_logger("v4l2_camera"), "Insufficient buffer memory");
+    ROS_ERROR("Insufficient buffer memory");
     return false;
   }
 
@@ -638,7 +598,7 @@ bool V4l2CameraDevice::initMemoryMapping()
         fd_, buf.m.offset));
 
     if (MAP_FAILED == buffers_[i].start) {
-      RCLCPP_ERROR(rclcpp::get_logger("v4l2_camera"), "Failed mapping device memory");
+      ROS_ERROR("Failed mapping device memory");
       return false;
     }
   }

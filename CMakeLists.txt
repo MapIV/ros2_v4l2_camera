@@ -16,8 +16,39 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # find dependencies
-find_package(ament_cmake_auto REQUIRED)
-ament_auto_find_build_dependencies()
+find_package(catkin REQUIRED COMPONENTS
+  camera_info_manager
+  image_transport
+  nodelet
+  pluginlib
+  roscpp
+  sensor_msgs
+)
+
+catkin_package(
+  INCLUDE_DIRS
+    include
+  CATKIN_DEPENDS
+    camera_info_manager
+    image_transport
+    nodelet
+    pluginlib
+    roscpp
+    sensor_msgs
+  LIBRARIES
+    camera_info_manager
+    image_transport
+    nodelet
+    pluginlib
+    roscpp
+    sensor_msgs
+)
+
+include_directories(
+  include
+  ${catkin_INCLUDE_DIRS}
+)
+
 find_package(CUDA)
 
 if (CUDA_FOUND)
@@ -25,6 +56,7 @@ if (CUDA_FOUND)
   cuda_add_library(v4l2_camera
     src/v4l2_camera.cpp
     src/v4l2_camera_device.cpp
+    src/v4l2_camera_nodelet.cpp
   )
   target_compile_definitions(v4l2_camera PUBLIC
     ENABLE_CUDA
@@ -39,19 +71,14 @@ if (CUDA_FOUND)
 else()
   add_library(v4l2_camera
     src/v4l2_camera.cpp
-    src/v4l2_camera_device.cpp)
+    src/v4l2_camera_device.cpp
+    src/v4l2_camera_nodelet.cpp
+    )
 endif()
-rclcpp_components_register_nodes(v4l2_camera "v4l2_camera::V4L2Camera")
 
 target_include_directories(v4l2_camera PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-
-ament_target_dependencies(v4l2_camera
-  "rclcpp"
-  "rclcpp_components"
-  "image_transport"
-  "camera_info_manager")
 
 target_compile_options(v4l2_camera PRIVATE -Werror)
 
@@ -88,27 +115,3 @@ target_compile_options(v4l2_camera_compose_test PRIVATE -Werror)
 install(TARGETS v4l2_camera_node v4l2_camera_compose_test
   EXPORT export_${PROJECT_NAME}
   DESTINATION lib/${PROJECT_NAME})
-
-if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  set(ament_cmake_copyright_FOUND TRUE)
-  ament_lint_auto_find_test_dependencies()
-endif()
-
-ament_export_include_directories(
-  include
-)
-ament_export_targets(
-  export_${PROJECT_NAME}
-)
-ament_export_libraries(
-  v4l2_camera
-)
-
-ament_export_dependencies(
-  "camera_info_manager"
-)
-
-ament_auto_package(INSTALL_TO_SHARE
-  launch
-)

@@ -22,8 +22,7 @@
 #include <image_transport/image_transport.hpp>
 
 #include <ostream>
-#include <rclcpp/rclcpp.hpp>
-#include <rcl_interfaces/msg/parameter.hpp>
+#include <ros/ros.h>
 
 #include <memory>
 #include <string>
@@ -82,24 +81,32 @@ void cudaErrorCheck(const cudaError_t e)
 }
 #endif
 
-class V4L2Camera : public rclcpp::Node
+class V4L2Camera
 {
 public:
-  explicit V4L2Camera(rclcpp::NodeOptions const & options);
-
+  explicit V4L2Camera(ros::NodeHandle node, ros::NodeHandle private_nh);
   virtual ~V4L2Camera();
 
 private:
+  double publish_rate_;
+  std::string device;
+  bool use_v4l2_buffer_timestamps;
+  int64_t timestamp_offset;
+
   using ImageSize = std::vector<int64_t>;
   using TimePerFrame = std::vector<int64_t>;
 
+  ros::NodeHandle gnh_;
+  ros::NodeHandle pnh_;
+  
   std::shared_ptr<V4l2CameraDevice> camera_;
 
   // Publisher used for intra process comm
-  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
-  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub_;
+  ros::Publisher image_pub_;
+  ros::Publisher info_pub_;
 
   // Publisher used for inter process comm
+  image_transport::ImageTransport image_transport_
   image_transport::CameraPublisher camera_transport_pub_;
 
   std::shared_ptr<camera_info_manager::CameraInfoManager> cinfo_;
@@ -112,10 +119,8 @@ private:
 
   std::map<std::string, int32_t> control_name_to_id_;
 
-  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr on_set_parameters_callback_;
 
-  double publish_rate_;
-  rclcpp::TimerBase::SharedPtr image_pub_timer_;
+  ros::Timer image_pub_timer_;
 
   bool publish_next_frame_;
 
@@ -125,25 +130,9 @@ private:
   std::shared_ptr<GPUMemoryManager> src_dev_;
   std::shared_ptr<GPUMemoryManager> dst_dev_;
 #endif
-
-  void createParameters();
-  bool handleParameter(rclcpp::Parameter const & param);
-
-  bool requestPixelFormat(std::string const & fourcc);
-  bool requestImageSize(ImageSize const & size);
-
-  bool requestTimePerFrame(TimePerFrame const & timePerFrame);
-
-  sensor_msgs::msg::Image::UniquePtr convert(sensor_msgs::msg::Image const & img) const;
-#ifdef ENABLE_CUDA
-  sensor_msgs::msg::Image::UniquePtr convertOnGpu(sensor_msgs::msg::Image const & img);
-#endif
-
-  bool checkCameraInfo(
-    sensor_msgs::msg::Image const & img,
-    sensor_msgs::msg::CameraInfo const & ci);
 };
 
 }  // namespace v4l2_camera
 
 #endif  // V4L2_CAMERA__V4L2_CAMERA_HPP_
+PLUGINLIB_EXPORT_CLASS(v4l2_camera::V4L2Camera, nodelet::Nodelet);
