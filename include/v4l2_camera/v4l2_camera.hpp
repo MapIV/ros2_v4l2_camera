@@ -89,6 +89,8 @@ public:
   virtual ~V4L2Camera();
 
 private:
+  ros::NodeHandle node;
+  ros::NodeHandle private_nh;
   double publish_rate_;
   std::string device;
   bool use_v4l2_buffer_timestamps;
@@ -96,9 +98,6 @@ private:
 
   using ImageSize = std::vector<int64_t>;
   using TimePerFrame = std::vector<int64_t>;
-
-  ros::NodeHandle gnh_;
-  ros::NodeHandle pnh_;
   
   std::shared_ptr<V4l2CameraDevice> camera_;
 
@@ -115,9 +114,11 @@ private:
   std::thread capture_thread_;
   std::atomic<bool> canceled_;
 
-  std::string camera_frame_id_;
   std::string output_encoding_;
-
+  std::string camera_info_url_;
+  std::string camera_frame_id_;
+  std::string pixel_format_;
+  
   std::map<std::string, int32_t> control_name_to_id_;
 
 
@@ -131,6 +132,12 @@ private:
   std::shared_ptr<GPUMemoryManager> src_dev_;
   std::shared_ptr<GPUMemoryManager> dst_dev_;
 #endif
+
+  void createParameters();
+  bool requestPixelFormat(std::string const & fourcc);
+  bool requestImageSize(std::vector<int64_t> const & size);
+  bool requestTimePerFrame(TimePerFrame const & tpf);
+
 
   void publishTimer();
 

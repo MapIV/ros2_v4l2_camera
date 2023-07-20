@@ -243,7 +243,6 @@ sensor_msgs::ImagePtr V4l2CameraDevice::capture()
   // }
   buf_stamp = ros::Time::now();
 
-        ROS_INFO_STREAM("aaaaaaaaaa: ");
   buf_stamp = buf_stamp + timestamp_offset_;
 
   // Requeue buffer to be reused for new captures
@@ -260,7 +259,7 @@ sensor_msgs::ImagePtr V4l2CameraDevice::capture()
   img_ptr->width = cur_data_format_.width;
   img_ptr->height = cur_data_format_.height;
   img_ptr->step = cur_data_format_.bytesPerLine;
-  ROS_INFO_STREAM("format" << pixfmt2s(cur_data_format_.pixelFormat));
+  
   if (cur_data_format_.pixelFormat == V4L2_PIX_FMT_YUYV
       || cur_data_format_.pixelFormat == V4L2_PIX_FMT_UYVY) {
     img_ptr->encoding = sensor_msgs::image_encodings::YUV422;
