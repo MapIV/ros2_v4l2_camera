@@ -11,9 +11,9 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
 endif()
 
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
-endif()
+# if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+#   add_compile_options(-Wall -Wextra -Wpedantic)
+# endif()
 
 # find dependencies
 find_package(catkin REQUIRED COMPONENTS
@@ -102,16 +102,23 @@ add_executable(v4l2_camera_node src/v4l2_camera_node.cpp)
 target_include_directories(v4l2_camera_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-target_link_libraries(v4l2_camera_node v4l2_camera)
+target_link_libraries(v4l2_camera_node
+  v4l2_camera
+  ${catkin_LIBRARIES}
+  )
 target_compile_options(v4l2_camera_node PRIVATE -Werror)
 
-add_executable(v4l2_camera_compose_test src/v4l2_camera_compose_test.cpp)
-target_include_directories(v4l2_camera_compose_test PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
-target_link_libraries(v4l2_camera_compose_test v4l2_camera)
-target_compile_options(v4l2_camera_compose_test PRIVATE -Werror)
+# add_executable(v4l2_camera_compose_test src/v4l2_camera_compose_test.cpp)
+# target_include_directories(v4l2_camera_compose_test PUBLIC
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#   $<INSTALL_INTERFACE:include>)
+# target_link_libraries(v4l2_camera_compose_test v4l2_camera)
+# target_compile_options(v4l2_camera_compose_test PRIVATE -Werror)
 
-install(TARGETS v4l2_camera_node v4l2_camera_compose_test
+# install(TARGETS v4l2_camera_node v4l2_camera_compose_test
+#   EXPORT export_${PROJECT_NAME}
+#   DESTINATION lib/${PROJECT_NAME})
+
+install(TARGETS v4l2_camera_node
   EXPORT export_${PROJECT_NAME}
   DESTINATION lib/${PROJECT_NAME})

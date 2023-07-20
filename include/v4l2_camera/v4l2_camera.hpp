@@ -18,8 +18,8 @@
 #include "v4l2_camera/v4l2_camera.hpp"
 #include "v4l2_camera/v4l2_camera_device.hpp"
 
-#include <camera_info_manager/camera_info_manager.hpp>
-#include <image_transport/image_transport.hpp>
+#include <camera_info_manager/camera_info_manager.h>
+#include <image_transport/image_transport.h>
 
 #include <ostream>
 #include <ros/ros.h>
@@ -28,6 +28,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <thread>
 
 #include "v4l2_camera/visibility_control.h"
 
@@ -91,7 +92,7 @@ private:
   double publish_rate_;
   std::string device;
   bool use_v4l2_buffer_timestamps;
-  int64_t timestamp_offset;
+  int timestamp_offset;
 
   using ImageSize = std::vector<int64_t>;
   using TimePerFrame = std::vector<int64_t>;
@@ -106,7 +107,7 @@ private:
   ros::Publisher info_pub_;
 
   // Publisher used for inter process comm
-  image_transport::ImageTransport image_transport_
+  image_transport::ImageTransport image_transport_;
   image_transport::CameraPublisher camera_transport_pub_;
 
   std::shared_ptr<camera_info_manager::CameraInfoManager> cinfo_;
@@ -130,9 +131,17 @@ private:
   std::shared_ptr<GPUMemoryManager> src_dev_;
   std::shared_ptr<GPUMemoryManager> dst_dev_;
 #endif
+
+  void publishTimer();
+
+
+  bool checkCameraInfo(
+    sensor_msgs::Image const & img,
+    sensor_msgs::CameraInfo const & ci);
+sensor_msgs::ImagePtr convert(sensor_msgs::Image& img);
 };
+
 
 }  // namespace v4l2_camera
 
 #endif  // V4L2_CAMERA__V4L2_CAMERA_HPP_
-PLUGINLIB_EXPORT_CLASS(v4l2_camera::V4L2Camera, nodelet::Nodelet);

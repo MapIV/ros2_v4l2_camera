@@ -16,7 +16,7 @@
 #define V4L2_CAMERA__V4L2_CAMERA_DEVICE_HPP_
 
 #include <ros/ros.h>
-#include <sensor_msgs/image.hpp>
+#include <sensor_msgs/Image.h>
 
 #include <map>
 #include <string>
@@ -86,7 +86,7 @@ public:
 
   void setTSCOffset();
 
-  sensor_msgs::msg::Image::UniquePtr capture();
+  sensor_msgs::ImagePtr capture();
 
 private:
   /// Image buffer

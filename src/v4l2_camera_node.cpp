@@ -11,10 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <memory>
 
+#include <ros/ros.h>
 #include "v4l2_camera/v4l2_camera.hpp"
 
-#include <memory>
 
 int main(int argc, char ** argv)
 {

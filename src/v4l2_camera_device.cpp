@@ -15,7 +15,7 @@
 #include "v4l2_camera/v4l2_camera_device.hpp"
 
 #include <ros/ros.h>
-#include <sensor_msgs/image_encodings.hpp>
+#include <sensor_msgs/image_encodings.h>
 
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -35,7 +35,7 @@ using v4l2_camera::V4l2CameraDevice;
 using sensor_msgs::Image;
 
 V4l2CameraDevice::V4l2CameraDevice(std::string device, bool use_v4l2_buffer_timestamps, ros::Duration timestamp_offset_duration)
-: device_{std::move(device)}, use_v4l2_buffer_timestamps_{use_v4l2_buffer_timestamps}, timestamp_offset_{timestamp_offset_duration}
+: device_{device}, use_v4l2_buffer_timestamps_{use_v4l2_buffer_timestamps}, timestamp_offset_{timestamp_offset_duration}
 {
 }
 
@@ -43,7 +43,7 @@ bool V4l2CameraDevice::open()
 {
   // Check if TSC offset applies
   setTSCOffset();
-  
+  ROS_INFO_STREAM("device" << device_);
   fd_ = ::open(device_.c_str(), O_RDWR);
 
   if (fd_ < 0) {
@@ -217,11 +217,10 @@ void V4l2CameraDevice::setTSCOffset()
   }
 }
 
-Image::UniquePtr V4l2CameraDevice::capture()
+sensor_msgs::ImagePtr V4l2CameraDevice::capture()
 {
   auto buf = v4l2_buffer{};
-  rclcpp::Time buf_stamp;
-
+  ros::Time buf_stamp;
   buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   buf.memory = V4L2_MEMORY_MMAP;
 
@@ -233,15 +232,18 @@ Image::UniquePtr V4l2CameraDevice::capture()
     return nullptr;
   }
 
-  if (use_v4l2_buffer_timestamps_) {
-    buf_stamp = rclcpp::Time(static_cast<int64_t>(buf.timestamp.tv_sec) * 1e9
-                             + static_cast<int64_t>(buf.timestamp.tv_usec) * 1e3 
-                             + getTimeOffset() - tsc_offset_);
+  // if (use_v4l2_buffer_timestamps_) {
+  //   buf_stamp = ros::Time(static_cast<int64_t>(buf.timestamp.tv_sec) * 1e9
+  //                            + static_cast<int64_t>(buf.timestamp.tv_usec) * 1e3 
+  //                            + getTimeOffset() - tsc_offset_);
   
-  }
-  else {
-    buf_stamp = rclcpp::Clock{RCL_SYSTEM_TIME}.now();
-  }
+  // }
+  // else {
+  //   buf_stamp = ros::Time::now();
+  // }
+  buf_stamp = ros::Time::now();
+
+        ROS_INFO_STREAM("aaaaaaaaaa: ");
   buf_stamp = buf_stamp + timestamp_offset_;
 
   // Requeue buffer to be reused for new captures
@@ -253,25 +255,25 @@ Image::UniquePtr V4l2CameraDevice::capture()
   }
 
   // Create image object
-  auto img = std::make_unique<Image>();
-  img->header.stamp = buf_stamp;
-  img->width = cur_data_format_.width;
-  img->height = cur_data_format_.height;
-  img->step = cur_data_format_.bytesPerLine;
-  if (cur_data_format_.pixelFormat == V4L2_PIX_FMT_YUYV) {
-    img->encoding = sensor_msgs::image_encodings::YUV422_YUY2;
-  } else if (cur_data_format_.pixelFormat == V4L2_PIX_FMT_UYVY) {
-    img->encoding = sensor_msgs::image_encodings::YUV422;
+  auto img_ptr = boost::make_shared<sensor_msgs::Image>();
+  img_ptr->header.stamp = buf_stamp;
+  img_ptr->width = cur_data_format_.width;
+  img_ptr->height = cur_data_format_.height;
+  img_ptr->step = cur_data_format_.bytesPerLine;
+  ROS_INFO_STREAM("format" << pixfmt2s(cur_data_format_.pixelFormat));
+  if (cur_data_format_.pixelFormat == V4L2_PIX_FMT_YUYV
+      || cur_data_format_.pixelFormat == V4L2_PIX_FMT_UYVY) {
+    img_ptr->encoding = sensor_msgs::image_encodings::YUV422;
   } else if (cur_data_format_.pixelFormat == V4L2_PIX_FMT_GREY) {
-    img->encoding = sensor_msgs::image_encodings::MONO8;
+    img_ptr->encoding = sensor_msgs::image_encodings::MONO8;
   } else {
     ROS_WARN("Current pixel format is not supported yet");
   }
-  img->data.resize(cur_data_format_.imageByteSize);
+  img_ptr->data.resize(cur_data_format_.imageByteSize);
 
   auto const & buffer = buffers_[buf.index];
-  std::copy(buffer.start, buffer.start + img->data.size(), img->data.begin());
-  return img;
+  std::copy(buffer.start, buffer.start + img_ptr->data.size(), img_ptr->data.begin());
+  return img_ptr;
 }
 
 int32_t V4l2CameraDevice::getControlValue(uint32_t id)
