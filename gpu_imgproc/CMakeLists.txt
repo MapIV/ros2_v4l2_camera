@@ -198,6 +198,7 @@ else()
     ${NVJPEG_INCLUDE_DIRS}
     # ${CUDART_INCLUDE_DIR}
     # ${CULIBOS_INCLUDE_DIR}
+    /usr/local/cuda-12.0/targets/x86_64-linux/include/ # FIXME
   )
   target_link_libraries(jpeg_compressor
     ${CUDA_nppicc_LIBRARY}
@@ -207,6 +208,7 @@ else()
     ${CULIBOS}
     # nvjpeg
     ${catkin_LIBARIES}
+    /usr/lib/x86_64-linux-gnu/libturbojpeg.so # FIXME
   )
 
   add_library(rectifier SHARED
@@ -215,6 +217,7 @@ else()
     ${CUDA_INCLUDE_DIR}
     ${CUDA_NPP_INCLUDES}
     ${OpenCV_INCLUDE_DIRS}
+    /usr/local/cuda-12.0/targets/x86_64-linux/include/ # FIXME
   )
   target_link_libraries(rectifier
     ${CUDA_nppidei_LIBRARY}
@@ -242,6 +245,12 @@ else()
           jpeg_compressor
           ${catkin_LIBRARIES}
           )
+  target_include_directories(gpu_imgproc PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+    ${CUDA_INCLUDE_DIR}
+    ${CUDA_NPP_INCLUDES}
+    )
 
   add_executable(gpu_imgproc_node
           src/gpu_imgproc_node.cpp
@@ -249,6 +258,8 @@ else()
   target_include_directories(gpu_imgproc_node PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+    ${CUDA_INCLUDE_DIR}
+    ${CUDA_NPP_INCLUDES}
     )
   target_link_libraries(gpu_imgproc_node
           ${CUDA_LIBRARIES}
