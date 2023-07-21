@@ -37,7 +37,6 @@
 #include <nppi_support_functions.h>
 #endif
 
-
 namespace v4l2_camera
 {
 #ifdef ENABLE_CUDA
@@ -126,6 +125,8 @@ private:
   std::shared_ptr<GPUMemoryManager> src_dev_;
   std::shared_ptr<GPUMemoryManager> dst_dev_;
 #endif
+
+  bool use_image_transport_;
 
   void createParameters();
   bool handleParameter(rclcpp::Parameter const & param);

@@ -35,18 +35,7 @@
 #include <nppi_color_conversion.h>
 #endif
 
-#include <chrono>
-#include <unordered_map>
-// #include <map>
-#include <iomanip>
-
 using namespace std::chrono_literals;
-
-typedef std::chrono::high_resolution_clock::time_point TimeVar;
-#define duration(a)                                                           \
-  ((double)std::chrono::duration_cast<std::chrono::microseconds>(a).count() /  \
-   1e6)
-#define TimeNow() std::chrono::high_resolution_clock::now()
 
 namespace v4l2_camera
 {
@@ -60,6 +49,9 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   // else transport plugins will fail to declare their parameters
   bool use_sensor_data_qos = declare_parameter("use_sensor_data_qos", false);
   publish_rate_ = declare_parameter("publish_rate", -1.0);
+
+  use_image_transport_ = declare_parameter("use_image_transport", true);
+
   if(std::abs(publish_rate_) < std::numeric_limits<double>::epsilon()){
     RCLCPP_WARN(get_logger(), "Invalid publish_rate = 0. Use default value -1 instead");
     publish_rate_ = -1.0;
@@ -72,13 +64,16 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   else{
     publish_next_frame_ = true;
   }
-  
   const auto qos = use_sensor_data_qos ? rclcpp::SensorDataQoS() : rclcpp::QoS(10);
-  camera_transport_pub_ = image_transport::create_camera_publisher(this, "image_raw",
-                                                                   qos.get_rmw_qos_profile());
-
-  info_pub_ = this->create_publisher<sensor_msgs::msg::CameraInfo>(
-    "test/camera_info", qos);
+  if (use_image_transport_) {
+    camera_transport_pub_ = image_transport::create_camera_publisher(this, "image_raw",
+                                                                    qos.get_rmw_qos_profile());
+  } else {
+    image_pub_ = this->create_publisher<sensor_msgs::msg::Image>(
+      "image_raw", qos);
+    info_pub_ = this->create_publisher<sensor_msgs::msg::CameraInfo>(
+      "camera_info", qos);
+  }
 
   // Prepare camera
   auto device_descriptor = rcl_interfaces::msg::ParameterDescriptor{};
@@ -104,20 +99,6 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   if (!camera_->start()) {
     return;
   }
-
-  #if 0
-  {
-    // TODO: Move this to inside NPPRectifier
-    auto camera_info = cinfo_->getCameraInfo();
-
-    int width = camera_info.width;
-    int height = camera_info.height;
-    double *D = camera_info.d.data();
-    double *K = camera_info.k.data();
-    double *R = camera_info.r.data();
-    double *P = camera_info.p.data();
-  }
-  #endif
 
   // Start capture thread
   capture_thread_ = std::thread{
@@ -156,9 +137,12 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
         ci->header.frame_id = camera_frame_id_;
         publish_next_frame_ = publish_rate_ < 0;
 
-        // // camera_transport_pub_.publish(*img, *ci);
-        image_pub_->publish(std::move(img));
-        info_pub_->publish(std::move(ci));
+        if (use_image_transport_)
+          camera_transport_pub_.publish(*img, *ci);
+        else {
+          image_pub_->publish(std::move(img));
+          info_pub_->publish(std::move(ci));
+        }
       }
     }
   };
