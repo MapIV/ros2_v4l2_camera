@@ -70,16 +70,6 @@ struct GPUMemoryManager
     }
   }
 };
-
-
-void cudaErrorCheck(const cudaError_t e)
-{
-  if (e != cudaSuccess) {
-    std::stringstream ss;
-    ss << cudaGetErrorName(e) << " : " << cudaGetErrorString(e);
-    throw std::runtime_error{ss.str()};
-  }
-}
 #endif
 
 class V4L2Camera
@@ -146,6 +136,9 @@ private:
     sensor_msgs::Image const & img,
     sensor_msgs::CameraInfo const & ci);
 sensor_msgs::ImagePtr convert(sensor_msgs::Image& img);
+#ifdef ENABLE_CUDA
+sensor_msgs::ImagePtr convertOnGpu(sensor_msgs::Image& img);
+#endif
 };
 
 

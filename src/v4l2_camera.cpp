@@ -70,14 +70,14 @@ V4L2Camera::V4L2Camera(ros::NodeHandle node, ros::NodeHandle private_nh)
     return;
   }
 
-  createParameters();
-
   auto camera_info_url_ = "";
   cinfo_ = std::make_shared<camera_info_manager::CameraInfoManager>(private_nh, camera_->getCameraName(), camera_info_url_);
 #ifdef ENABLE_CUDA
   src_dev_ = std::allocate_shared<GPUMemoryManager>(allocator_);
   dst_dev_ = std::allocate_shared<GPUMemoryManager>(allocator_);
 #endif
+
+  createParameters();
 
   // Start the camera
   if (!camera_->start()) {
@@ -459,6 +459,78 @@ sensor_msgs::ImagePtr V4L2Camera::convert(sensor_msgs::Image& img)
     return nullptr;
   }
 }
+
+#ifdef ENABLE_CUDA
+void cudaErrorCheck(const cudaError_t e)
+{
+  if (e != cudaSuccess) {
+    std::stringstream ss;
+    ss << cudaGetErrorName(e) << " : " << cudaGetErrorString(e);
+    throw std::runtime_error{ss.str()};
+  }
+}
+
+sensor_msgs::ImagePtr V4L2Camera::convertOnGpu(sensor_msgs::Image& img)
+{
+  if (img.encoding != sensor_msgs::image_encodings::YUV422 ||
+      output_encoding_ != sensor_msgs::image_encodings::RGB8) {
+    ROS_WARN_ONCE(
+        "Conversion not supported yet: %s -> %s", img.encoding.c_str(), output_encoding_.c_str());
+    return nullptr;
+  }
+
+  auto outImg = boost::make_shared<sensor_msgs::Image>();
+  outImg->width = img.width;
+  outImg->height = img.height;
+  outImg->step = img.width * 3;
+  outImg->encoding = output_encoding_;
+  outImg->data.resize(outImg->height * outImg->step);
+
+  src_dev_->Allocate(img.width, img.height);
+  dst_dev_->Allocate(outImg->width, outImg->height);
+
+  unsigned int src_num_channel = static_cast<int>(img.step / img.width);  // No padded input is assumed
+  cudaErrorCheck(cudaMemcpy2DAsync(static_cast<void*>(src_dev_->dev_ptr),
+                                   src_dev_->step_bytes,
+                                   static_cast<const void*>(img.data.data()),
+                                   img.step,  // in byte. including padding
+                                   img.width * src_num_channel * sizeof(Npp8u),  // in byte
+                                   img.height,                 // in pixel
+                                   cudaMemcpyHostToDevice));
+
+  NppiSize roi = {static_cast<int>(img.width), static_cast<int>(img.height)};
+  NppStatus res;
+  if (img.encoding == sensor_msgs::image_encodings::YUV422) {
+    res = nppiYUV422ToRGB_8u_C2C3R(src_dev_->dev_ptr,
+                                             src_dev_->step_bytes,
+                                             dst_dev_->dev_ptr,
+                                             dst_dev_->step_bytes,
+                                             roi);
+  } else {
+    res = nppiCbYCr422ToRGB_8u_C2C3R(src_dev_->dev_ptr,
+                                     src_dev_->step_bytes,
+                                     dst_dev_->dev_ptr,
+                                     dst_dev_->step_bytes,
+                                     roi);
+  }
+
+  if (res != NPP_SUCCESS) {
+    ROS_ERROR("NPP Error: %d", res);
+  }
+
+  cudaErrorCheck(cudaMemcpy2DAsync(static_cast<void*>(outImg->data.data()),
+                                   outImg->step,
+                                   static_cast<const void*>(dst_dev_->dev_ptr),
+                                   dst_dev_->step_bytes,
+                                   outImg->width * 3 * sizeof(Npp8u),  // in byte. exclude padding
+                                   outImg->height,
+                                   cudaMemcpyDeviceToHost));
+
+  cudaErrorCheck(cudaDeviceSynchronize());
+
+  return outImg;
+}
+#endif
 
 void V4L2Camera::publishTimer()
 {
