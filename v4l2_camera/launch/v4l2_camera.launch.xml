@@ -1,6 +1,6 @@
 <launch>
     <arg name="publish_rate" default="-1.0" />
-    <arg name="video_device" default="/dev/video0" />
+    <arg name="video_device" default="/dev/video2" />
     <arg name="use_v4l2_buffer_timestamps" default="true" />
     <arg name="timestamp_offset" default="0.0" />
     <arg name="output_encoding" default="rgb8" />
@@ -8,7 +8,7 @@
     <arg name="camera_frame_id" default="camera" />
     <arg name="pixel_format" default="YUYV" />
 
-    <node pkg="v4l2_camera" type="v4l2_camera_node" name="v4l2_camera" output="screen" launch-prefix="xterm -e gdb -ex run --args">
+    <node pkg="v4l2_camera" type="v4l2_camera_node" name="v4l2_camera" output="screen">
         <param name="publish_rate" value="$(arg publish_rate)" />
         <param name="video_device" value="$(arg video_device)" />
         <param name="use_v4l2_buffer_timestamps" value="$(arg use_v4l2_buffer_timestamps)" />

@@ -47,6 +47,7 @@ V4L2Camera::V4L2Camera(ros::NodeHandle node, ros::NodeHandle private_nh)
   private_nh.getParam("video_device", device);
   private_nh.getParam("use_v4l2_buffer_timestamps", use_v4l2_buffer_timestamps);
   private_nh.getParam("timestamp_offset", timestamp_offset);
+  private_nh.getParam("use_image_transport", use_image_transport_);
 
   if(std::abs(publish_rate_) < std::numeric_limits<double>::epsilon()){
     ROS_WARN("Invalid publish_rate = 0. Use default value -1 instead");
@@ -60,7 +61,12 @@ V4L2Camera::V4L2Camera(ros::NodeHandle node, ros::NodeHandle private_nh)
   // else{
   //   publish_next_frame_ = true;
   // }
-  camera_transport_pub_ = image_transport_.advertiseCamera("image_raw", 10);
+  if (use_image_transport_) {
+    camera_transport_pub_ = image_transport_.advertiseCamera("image_raw", 10);
+  } else {
+    image_pub_ = node.advertise<sensor_msgs::Image>("image_raw", 10);
+    info_pub_ = node.advertise<sensor_msgs::CameraInfo>("camera_info", 10);
+  }
 
   ros::Duration timestamp_offset_duration(0, timestamp_offset);
 
@@ -122,7 +128,12 @@ V4L2Camera::V4L2Camera(ros::NodeHandle node, ros::NodeHandle private_nh)
         ci->header.frame_id = camera_frame_id_;
         publish_next_frame_ = publish_rate_ < 0;
 
-        camera_transport_pub_.publish(*img, *ci);
+        if (use_image_transport_) {
+          camera_transport_pub_.publish(*img, *ci);
+        } else {
+          image_pub_.publish(*img);
+          info_pub_.publish(*ci);
+        }
       }
     }
   };
