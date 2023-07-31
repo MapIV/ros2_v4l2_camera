@@ -443,27 +443,10 @@ static void yuyv2rgb(unsigned char const * YUV, unsigned char * RGB, int NumPixe
 
 sensor_msgs::ImagePtr V4L2Camera::convert(sensor_msgs::Image& img)
 {
-  // TODO(sander): temporary until cv_bridge and image_proc are available in ROS 2
-  if (img.encoding == sensor_msgs::image_encodings::YUV422 &&
-    output_encoding_ == sensor_msgs::image_encodings::RGB8)
-  {
-    auto outImg = boost::make_shared<sensor_msgs::Image>();
-    outImg->width = img.width;
-    outImg->height = img.height;
-    outImg->step = img.width * 3;
-    outImg->encoding = output_encoding_;
-    outImg->data.resize(outImg->height * outImg->step);
-    for (auto i = 0u; i < outImg->height; ++i) {
-      yuyv2rgb(
-        img.data.data() + i * img.step, outImg->data.data() + i * outImg->step,
-        outImg->width);
-    }
-    return outImg;
-  } else {
-    ROS_WARN_ONCE(
-      "Conversion not supported yet: %s -> %s", img.encoding.c_str(), output_encoding_.c_str());
-    return nullptr;
-  }
+
+  ROS_WARN_ONCE(
+    "Conversion not supported yet: %s -> %s", img.encoding.c_str(), output_encoding_.c_str());
+  return nullptr;
 }
 
 #ifdef ENABLE_CUDA
