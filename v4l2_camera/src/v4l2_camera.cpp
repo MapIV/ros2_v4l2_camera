@@ -443,10 +443,27 @@ static void yuyv2rgb(unsigned char const * YUV, unsigned char * RGB, int NumPixe
 
 sensor_msgs::ImagePtr V4L2Camera::convert(sensor_msgs::Image& img)
 {
-
-  ROS_WARN_ONCE(
-    "Conversion not supported yet: %s -> %s", img.encoding.c_str(), output_encoding_.c_str());
-  return nullptr;
+  // TODO(sander): temporary until cv_bridge and image_proc are available in ROS 2
+  if (img.encoding == sensor_msgs::image_encodings::YUV422 &&
+    output_encoding_ == sensor_msgs::image_encodings::RGB8)
+  {
+    auto outImg = boost::make_shared<sensor_msgs::Image>();
+    outImg->width = img.width;
+    outImg->height = img.height;
+    outImg->step = img.width * 3;
+    outImg->encoding = output_encoding_;
+    outImg->data.resize(outImg->height * outImg->step);
+    for (auto i = 0u; i < outImg->height; ++i) {
+      yuyv2rgb(
+        img.data.data() + i * img.step, outImg->data.data() + i * outImg->step,
+        outImg->width);
+    }
+    return outImg;
+  } else {
+    ROS_WARN_ONCE(
+      "Conversion not supported yet: %s -> %s", img.encoding.c_str(), output_encoding_.c_str());
+    return nullptr;
+  }
 }
 
 #ifdef ENABLE_CUDA
@@ -461,7 +478,8 @@ void cudaErrorCheck(const cudaError_t e)
 
 sensor_msgs::ImagePtr V4L2Camera::convertOnGpu(sensor_msgs::Image& img)
 {
-  if (img.encoding != sensor_msgs::image_encodings::YUV422 ||
+  if ((img.encoding != sensor_msgs::image_encodings::YUV422 &&
+      img.encoding != sensor_msgs::image_encodings::YUV422_YUY2) ||
       output_encoding_ != sensor_msgs::image_encodings::RGB8) {
     ROS_WARN_ONCE(
         "Conversion not supported yet: %s -> %s", img.encoding.c_str(), output_encoding_.c_str());
@@ -489,11 +507,19 @@ sensor_msgs::ImagePtr V4L2Camera::convertOnGpu(sensor_msgs::Image& img)
 
   NppiSize roi = {static_cast<int>(img.width), static_cast<int>(img.height)};
   NppStatus res;
-  res = nppiCbYCr422ToRGB_8u_C2C3R(src_dev_->dev_ptr,
-                                    src_dev_->step_bytes,
-                                    dst_dev_->dev_ptr,
-                                    dst_dev_->step_bytes,
-                                    roi);
+  if (img.encoding == sensor_msgs::image_encodings::YUV422_YUY2) {
+    res = nppiYUV422ToRGB_8u_C2C3R(src_dev_->dev_ptr,
+                                             src_dev_->step_bytes,
+                                             dst_dev_->dev_ptr,
+                                             dst_dev_->step_bytes,
+                                             roi);
+  } else {
+    res = nppiCbYCr422ToRGB_8u_C2C3R(src_dev_->dev_ptr,
+                                     src_dev_->step_bytes,
+                                     dst_dev_->dev_ptr,
+                                     dst_dev_->step_bytes,
+                                     roi);
+  }
 
   if (res != NPP_SUCCESS) {
     ROS_ERROR("NPP Error: %d", res);

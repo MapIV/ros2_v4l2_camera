@@ -259,9 +259,10 @@ sensor_msgs::ImagePtr V4l2CameraDevice::capture()
   img_ptr->width = cur_data_format_.width;
   img_ptr->height = cur_data_format_.height;
   img_ptr->step = cur_data_format_.bytesPerLine;
-  
-  if (cur_data_format_.pixelFormat == V4L2_PIX_FMT_YUYV
-      || cur_data_format_.pixelFormat == V4L2_PIX_FMT_UYVY) {
+
+  if (cur_data_format_.pixelFormat == V4L2_PIX_FMT_YUYV) {
+    img_ptr->encoding = sensor_msgs::image_encodings::YUV422_YUY2;
+  } else if (cur_data_format_.pixelFormat == V4L2_PIX_FMT_UYVY) {
     img_ptr->encoding = sensor_msgs::image_encodings::YUV422;
   } else if (cur_data_format_.pixelFormat == V4L2_PIX_FMT_GREY) {
     img_ptr->encoding = sensor_msgs::image_encodings::MONO8;

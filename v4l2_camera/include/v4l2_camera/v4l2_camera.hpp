@@ -17,6 +17,7 @@
 
 #include "v4l2_camera/v4l2_camera.hpp"
 #include "v4l2_camera/v4l2_camera_device.hpp"
+#include "v4l2_camera/yuv422_yuy2_image_encodings.h"
 
 #include <camera_info_manager/camera_info_manager.h>
 #include <image_transport/image_transport.h>

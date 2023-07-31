@@ -27,6 +27,8 @@
 #include "v4l2_camera/control.hpp"
 #include "v4l2_camera/image_format.hpp"
 #include "v4l2_camera/pixel_format.hpp"
+#include "v4l2_camera/yuv422_yuy2_image_encodings.h"
+
 
 namespace v4l2_camera
 {
