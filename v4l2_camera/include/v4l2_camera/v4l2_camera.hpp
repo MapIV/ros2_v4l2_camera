@@ -109,6 +109,12 @@ private:
   std::string camera_frame_id_;
   std::string pixel_format_;
   
+  int image_size_width;
+  int image_size_height;
+
+  int time_per_frame_first;
+  int time_per_frame_second;
+
   std::map<std::string, int32_t> control_name_to_id_;
 
 

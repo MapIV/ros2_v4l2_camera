@@ -167,9 +167,6 @@ void V4L2Camera::createParameters()
   // Format parameters
   // Pixel format
   auto const & image_formats = camera_->getImageFormats();
-  // auto pixel_format_descriptor = rcl_interfaces::msg::ParameterDescriptor{};
-  // pixel_format_descriptor.name = "pixel_format";
-  // pixel_format_descriptor.description = "Pixel format (FourCC)";
   auto pixel_format_constraints = std::ostringstream{};
   for (auto const & format : image_formats) {
     pixel_format_constraints <<
@@ -227,21 +224,19 @@ void V4L2Camera::createParameters()
   }
 
   ROS_INFO("Image width & height");
-  // private_nh.param<ImageSize>("image_size",
-  //                       image_size,
-  //                       {640, 480});
-  image_size = {640, 480};
+  private_nh.param<int>("image_size",image_size_width, 640);
+  private_nh.param<int>("image_size",image_size_height, 480);
+  image_size = {image_size_width, image_size_height};
   requestImageSize(image_size);
 
   // Time per frame
   if (camera_->timePerFrameSupported()) {
     auto tpf = camera_->getCurrentTimePerFrame();
 
-    // ROS_INFO("Image width & height");
-    // private_nh.param<TimePerFrame>("time_per_frame",
-    //                       time_per_frame,
-    //                       {tpf.first, tpf.second});
-    TimePerFrame time_per_frame = {tpf.first, tpf.second};
+    ROS_INFO("Desired period between successive frames in seconds");
+    private_nh.param<int>("time_per_frame_first", time_per_frame_first, tpf.first);
+    private_nh.param<int>("time_per_frame_second", time_per_frame_second, tpf.second);
+    TimePerFrame time_per_frame = {static_cast<int64_t>(tpf.first), static_cast<int64_t>(tpf.second)};
 
     requestTimePerFrame(time_per_frame);
   }
