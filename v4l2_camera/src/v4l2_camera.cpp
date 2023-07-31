@@ -506,19 +506,11 @@ sensor_msgs::ImagePtr V4L2Camera::convertOnGpu(sensor_msgs::Image& img)
 
   NppiSize roi = {static_cast<int>(img.width), static_cast<int>(img.height)};
   NppStatus res;
-  if (img.encoding == sensor_msgs::image_encodings::YUV422) {
-    res = nppiYUV422ToRGB_8u_C2C3R(src_dev_->dev_ptr,
-                                             src_dev_->step_bytes,
-                                             dst_dev_->dev_ptr,
-                                             dst_dev_->step_bytes,
-                                             roi);
-  } else {
-    res = nppiCbYCr422ToRGB_8u_C2C3R(src_dev_->dev_ptr,
-                                     src_dev_->step_bytes,
-                                     dst_dev_->dev_ptr,
-                                     dst_dev_->step_bytes,
-                                     roi);
-  }
+  res = nppiCbYCr422ToRGB_8u_C2C3R(src_dev_->dev_ptr,
+                                    src_dev_->step_bytes,
+                                    dst_dev_->dev_ptr,
+                                    dst_dev_->step_bytes,
+                                    roi);
 
   if (res != NPP_SUCCESS) {
     ROS_ERROR("NPP Error: %d", res);
