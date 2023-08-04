@@ -111,7 +111,7 @@ if (JETSON)
     /usr/src/jetson_multimedia_api/samples/common/classes/NvLogging.cpp
   )
   target_include_directories(jpeg_compressor PUBLIC
-    ${CUDA_INCLUDE_DIR}
+    ${CUDA_INCLUDE_DIRS}
     ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
     ${SYS_ROOT}/usr/src/jetson_multimedia_api/include
     ${SYS_ROOT}/usr/src/jetson_multimedia_api/include/libjpeg-8b
@@ -134,7 +134,7 @@ if (JETSON)
   add_library(rectifier SHARED
     src/accelerator/rectifier.cpp)
   target_include_directories(rectifier PUBLIC
-    ${CUDA_INCLUDE_DIR}
+    ${CUDA_INCLUDE_DIRS}
     ${OpenCV_INCLUDE_DIRS}
   )
   target_link_directories(rectifier PUBLIC
@@ -192,13 +192,12 @@ else()
     src/accelerator/jpeg_compressor.cpp
   )
   target_include_directories(jpeg_compressor PUBLIC
-    ${CUDA_INCLUDE_DIR}
-    ${CUDA_NPP_INCLUDES}
+    ${CUDA_INCLUDE_DIRS}
+    # ${CUDA_NPP_INCLUDES}
     ${LibJpegTurbo_INCLUDE_DIRS}
     ${NVJPEG_INCLUDE_DIRS}
     # ${CUDART_INCLUDE_DIR}
     # ${CULIBOS_INCLUDE_DIR}
-    /usr/local/cuda-12.0/targets/x86_64-linux/include/ # FIXME
   )
   target_link_libraries(jpeg_compressor
     ${CUDA_nppicc_LIBRARY}
@@ -214,10 +213,9 @@ else()
   add_library(rectifier SHARED
     src/accelerator/rectifier.cpp)
   target_include_directories(rectifier PUBLIC
-    ${CUDA_INCLUDE_DIR}
-    ${CUDA_NPP_INCLUDES}
+    ${CUDA_INCLUDE_DIRS}
+    # ${CUDA_NPP_INCLUDES}
     ${OpenCV_INCLUDE_DIRS}
-    /usr/local/cuda-12.0/targets/x86_64-linux/include/ # FIXME
   )
   target_link_libraries(rectifier
     ${CUDA_nppidei_LIBRARY}
