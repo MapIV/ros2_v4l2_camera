@@ -217,7 +217,6 @@ else()
       ${LibJpegTurbo_INCLUDE_DIRS}
     )
     target_link_libraries(jpeg_compressor
-      ${CUDA_nppicc_LIBRARY}
       ${LibJpegTurbo_LIBRARY}
       ${catkin_LIBARIES}
     )
