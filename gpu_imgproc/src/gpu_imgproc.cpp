@@ -5,7 +5,7 @@
 namespace gpu_imgproc {
 
 GpuImgProc::GpuImgProc(ros::NodeHandle &nh, ros::NodeHandle &pnh)
-    : node_(nh), private_node_(pnh) {
+    : node_(nh), private_node_(pnh), rectifier_active_(false) {
     ROS_INFO("Initializing node gpu_imgproc");
 
     // std::string image_raw_topic = this->declare_parameter<std::string>("image_raw_topic", "/camera/image_raw");
@@ -86,6 +86,9 @@ GpuImgProc::GpuImgProc(ros::NodeHandle &nh, ros::NodeHandle &pnh)
 #elif TURBOJPEG_AVAILABLE
     raw_compressor_ = std::make_shared<JpegCompressor::CPUCompressor>();
     rect_compressor_ = std::make_shared<JpegCompressor::CPUCompressor>();
+#else
+    ROS_ERROR("No JPEG compressor available");
+    return;
 #endif
 
     rectified_pub_ = node_.advertise<Image>("image_rect", 10);
@@ -155,6 +158,11 @@ void GpuImgProc::imageCallback(const Image::ConstPtr &msg) {
 
 void GpuImgProc::cameraInfoCallback(const CameraInfo::ConstPtr &msg) {
     ROS_INFO("Received camera info");
+
+    if (msg->D.size() == 0 || msg->P.size() == 0) {
+        ROS_ERROR("Camera info message does not contain distortion or projection matrix");
+        return;
+    }
 
     switch(rectifier_impl_) {
         case Rectifier::Implementation::NPP:
