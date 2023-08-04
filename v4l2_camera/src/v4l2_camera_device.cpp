@@ -232,16 +232,15 @@ sensor_msgs::ImagePtr V4l2CameraDevice::capture()
     return nullptr;
   }
 
-  // if (use_v4l2_buffer_timestamps_) {
-  //   buf_stamp = ros::Time(static_cast<int64_t>(buf.timestamp.tv_sec) * 1e9
-  //                            + static_cast<int64_t>(buf.timestamp.tv_usec) * 1e3 
-  //                            + getTimeOffset() - tsc_offset_);
-  
-  // }
-  // else {
-  //   buf_stamp = ros::Time::now();
-  // }
-  buf_stamp = ros::Time::now();
+   if (use_v4l2_buffer_timestamps_) {
+     buf_stamp = ros::Time(static_cast<int64_t>(buf.timestamp.tv_sec) * 1e9
+                              + static_cast<int64_t>(buf.timestamp.tv_usec) * 1e3
+                              + getTimeOffset() - tsc_offset_);
+
+   }
+   else {
+     buf_stamp = ros::Time::now();
+   }
 
   buf_stamp = buf_stamp + timestamp_offset_;
 
