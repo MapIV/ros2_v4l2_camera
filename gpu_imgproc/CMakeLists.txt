@@ -21,7 +21,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES gpu_imgproc sensor_msgs
-  CATKIN_DEPENDS roscpp sensor_msgs cv_bridge
+  CATKIN_DEPENDS roscpp sensor_msgs cv_bridge image_geometry
 )
 
 include_directories(
