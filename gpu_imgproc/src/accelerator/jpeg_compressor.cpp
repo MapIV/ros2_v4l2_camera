@@ -1,7 +1,7 @@
 #include <cstdio>
 #include <cstring>
 
-// #include <rclcpp/rclcpp.hpp>
+#include <ros/ros.h>
 
 #include "accelerator/jpeg_compressor.hpp"
 #include "accelerator/color_space.hpp"
@@ -22,7 +22,7 @@
     {                                                                                           \
         nvjpegStatus_t _e = (call);                                                             \
         if (_e != NVJPEG_STATUS_SUCCESS) {                                                      \
-            ROS_ERROR("NVJPEG failure: '%s' at %s:%d", nvjpegGetErrorString(_e), __FILE__, __LINE__); \
+            ROS_ERROR("NVJPEG failure: '%d' at %s:%d", _e, __FILE__, __LINE__); \
             exit(1);                                                                            \
         }                                                                                       \
     }

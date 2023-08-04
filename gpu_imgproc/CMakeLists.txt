@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.5)
 project(gpu_imgproc LANGUAGES CUDA CXX)
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 # Default to C++14
 if(NOT CMAKE_CXX_STANDARD)
@@ -14,8 +14,6 @@ endif()
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
-  # rclcpp
-  # rclcpp_components
   sensor_msgs
   cv_bridge
 )
@@ -150,12 +148,6 @@ if (JETSON)
     ${catkin_LIBRARIES}
   )
 
-  # include_directories(
-  #         include
-  #         ${CUDA_INCLUDE_DIRS}
-  #         ${OpenCV_INCLUDE_DIRS}
-  # )
-
   add_library(gpu_imgproc SHARED
           src/gpu_imgproc.cpp
           )
@@ -193,11 +185,8 @@ else()
   )
   target_include_directories(jpeg_compressor PUBLIC
     ${CUDA_INCLUDE_DIRS}
-    # ${CUDA_NPP_INCLUDES}
     ${LibJpegTurbo_INCLUDE_DIRS}
     ${NVJPEG_INCLUDE_DIRS}
-    # ${CUDART_INCLUDE_DIR}
-    # ${CULIBOS_INCLUDE_DIR}
   )
   target_link_libraries(jpeg_compressor
     ${CUDA_nppicc_LIBRARY}
@@ -205,16 +194,13 @@ else()
     ${NVJPEG_LIBRARY}
     ${CUDART_LIBRARY}
     ${CULIBOS}
-    # nvjpeg
     ${catkin_LIBARIES}
-    /usr/lib/x86_64-linux-gnu/libturbojpeg.so # FIXME
   )
 
   add_library(rectifier SHARED
     src/accelerator/rectifier.cpp)
   target_include_directories(rectifier PUBLIC
     ${CUDA_INCLUDE_DIRS}
-    # ${CUDA_NPP_INCLUDES}
     ${OpenCV_INCLUDE_DIRS}
   )
   target_link_libraries(rectifier
@@ -225,12 +211,6 @@ else()
     ${OpenCV_LIBRARIES}
     ${catkin_LIBRARIES}
   )
-
-  # include_directories(
-  #         include
-  #         ${CUDA_INCLUDE_DIRS}
-  #         ${OpenCV_INCLUDE_DIRS}
-  # )
 
   add_library(gpu_imgproc SHARED
           src/gpu_imgproc.cpp
@@ -264,7 +244,7 @@ else()
           ${OpenCV_LIBRARIES}
           ${catkin_LIBRARIES}
           gpu_imgproc
-          )
+          )nvjpegGetErrorString(
   # target_compile_options(gpu_imgproc_node PRIVATE -Wall -Wextra -Wpedantic -Wunused-function)
 
   install(
