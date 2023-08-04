@@ -53,6 +53,7 @@ find_library(CUDA_nppisu_LIBRARY nppisu ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
 if (CUDA_nppicc_LIBRARY AND CUDA_nppidei_LIBRARY AND CUDA_nppig_LIBRARY AND CUDA_nppisu_LIBRARY)
   message("NPP found")
   add_definitions(-DNPP_AVAILABLE)
+  set(NPP_FOUND TRUE)
 endif()
 
 find_package(OpenCV REQUIRED PATHS "/usr/local/") # what to do about this one?
@@ -183,42 +184,82 @@ else()
   add_library(jpeg_compressor SHARED
     src/accelerator/jpeg_compressor.cpp
   )
-  target_include_directories(jpeg_compressor PUBLIC
-    ${CUDA_INCLUDE_DIRS}
-    ${LibJpegTurbo_INCLUDE_DIRS}
-    ${NVJPEG_INCLUDE_DIRS}
-  )
-  target_link_libraries(jpeg_compressor
-    ${CUDA_nppicc_LIBRARY}
-    ${LibJpegTurbo_LIBRARY}
-    ${NVJPEG_LIBRARY}
-    ${CUDART_LIBRARY}
-    ${CULIBOS}
-    ${catkin_LIBARIES}
-  )
+
+  if (NVJPEG_FOUND AND LibJpegTurbo_FOUND)
+    target_include_directories(jpeg_compressor PUBLIC
+      ${CUDA_INCLUDE_DIRS}
+      ${LibJpegTurbo_INCLUDE_DIRS}
+      ${NVJPEG_INCLUDE_DIRS}
+    )
+    target_link_libraries(jpeg_compressor
+      ${CUDA_nppicc_LIBRARY}
+      ${LibJpegTurbo_LIBRARY}
+      ${NVJPEG_LIBRARY}
+      ${CUDART_LIBRARY}
+      ${CULIBOS}
+      ${catkin_LIBARIES}
+    )
+  elseif (NVJPEG_FOUND)
+    target_include_directories(jpeg_compressor PUBLIC
+      ${CUDA_INCLUDE_DIRS}
+      ${NVJPEG_INCLUDE_DIRS}
+    )
+    target_link_libraries(jpeg_compressor
+      ${CUDA_nppicc_LIBRARY}
+      ${NVJPEG_LIBRARY}
+      ${CUDART_LIBRARY}
+      ${CULIBOS}
+      ${catkin_LIBARIES}
+    )
+  elseif (LibJpegTurbo_FOUND)
+    target_include_directories(jpeg_compressor PUBLIC
+      ${CUDA_INCLUDE_DIRS}
+      ${LibJpegTurbo_INCLUDE_DIRS}
+    )
+    target_link_libraries(jpeg_compressor
+      ${CUDA_nppicc_LIBRARY}
+      ${LibJpegTurbo_LIBRARY}
+      ${catkin_LIBARIES}
+    )
+  else()
+    message(FATAL_ERROR "No JPEG encoder found")
+  endif()
 
   add_library(rectifier SHARED
     src/accelerator/rectifier.cpp)
-  target_include_directories(rectifier PUBLIC
-    ${CUDA_INCLUDE_DIRS}
-    ${OpenCV_INCLUDE_DIRS}
-  )
-  target_link_libraries(rectifier
-    ${CUDA_nppidei_LIBRARY}
-    ${CUDA_nppig_LIBRARY}
-    ${CUDA_nppicc_LIBRARY}
-    ${CUDA_nppisu_LIBRARY}
-    ${OpenCV_LIBRARIES}
-    ${catkin_LIBRARIES}
-  )
+
+  if (NPP_FOUND AND OPENCV_FOUND)
+    message("Using NPP")
+    target_include_directories(rectifier PUBLIC
+      ${CUDA_INCLUDE_DIRS}
+      ${OpenCV_INCLUDE_DIRS}
+    )
+    target_link_libraries(rectifier
+      ${CUDA_nppidei_LIBRARY}
+      ${CUDA_nppig_LIBRARY}
+      ${CUDA_nppicc_LIBRARY}
+      ${CUDA_nppisu_LIBRARY}
+      ${OpenCV_LIBRARIES}
+      ${catkin_LIBRARIES}
+    )
+  elseif(OPENCV_FOUND)
+    message("Using OpenCV")
+    target_include_directories(rectifier PUBLIC
+      ${OpenCV_INCLUDE_DIRS}
+    )
+    target_link_libraries(rectifier
+      ${OpenCV_LIBRARIES}
+      ${catkin_LIBRARIES}
+    )
+  else()
+    message(FATAL_ERROR "No rectifier found")
+  endif()
 
   add_library(gpu_imgproc SHARED
           src/gpu_imgproc.cpp
           )
 
   target_link_libraries(gpu_imgproc
-          ${CUDA_LIBRARIES}
-          ${OpenCV_LIBRARIES}
           rectifier
           jpeg_compressor
           ${catkin_LIBRARIES}
@@ -226,8 +267,6 @@ else()
   target_include_directories(gpu_imgproc PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
-    ${CUDA_INCLUDE_DIR}
-    ${CUDA_NPP_INCLUDES}
     )
 
   add_executable(gpu_imgproc_node
@@ -236,12 +275,8 @@ else()
   target_include_directories(gpu_imgproc_node PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
-    ${CUDA_INCLUDE_DIR}
-    ${CUDA_NPP_INCLUDES}
     )
   target_link_libraries(gpu_imgproc_node
-          ${CUDA_LIBRARIES}
-          ${OpenCV_LIBRARIES}
           ${catkin_LIBRARIES}
           gpu_imgproc
           )
