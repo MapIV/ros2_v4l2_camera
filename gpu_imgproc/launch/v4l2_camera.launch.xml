@@ -17,6 +17,8 @@
     <arg name="timestamp_offset" default="0.0" />
     <arg name="output_encoding" default="rgb8" />
     <arg name="camera_info_url" default="" />
+    <arg name="camera_info_url_1" default="$(arg camera_info_url)" />
+    <arg name="camera_info_url_2" default="$(arg camera_info_url)" />
     <arg name="camera_frame_id_1" default="camera_1" />
     <arg name="camera_frame_id_2" default="camera_2" />
     <arg name="pixel_format" default="YUYV" />
@@ -32,7 +34,7 @@
         <param name="use_v4l2_buffer_timestamps" value="$(arg use_v4l2_buffer_timestamps)" />
         <param name="timestamp_offset" value="$(arg timestamp_offset)" />
         <param name="output_encoding" value="$(arg output_encoding)" />
-        <param name="camera_info_url" value="$(arg camera_info_url)" />
+        <param name="camera_info_url" value="$(arg camera_info_url_1)" />
         <param name="camera_frame_id" value="$(arg camera_frame_id_1)" />
         <param name="pixel_format" value="$(arg pixel_format)" />
         <param name="use_image_transport" value="$(arg use_image_transport)" />
@@ -51,7 +53,7 @@
         <param name="use_v4l2_buffer_timestamps" value="$(arg use_v4l2_buffer_timestamps)" />
         <param name="timestamp_offset" value="$(arg timestamp_offset)" />
         <param name="output_encoding" value="$(arg output_encoding)" />
-        <param name="camera_info_url" value="$(arg camera_info_url)" />
+        <param name="camera_info_url" value="$(arg camera_info_url_2)" />
         <param name="camera_frame_id" value="$(arg camera_frame_id_2)" />
         <param name="pixel_format" value="$(arg pixel_format)" />
         <param name="use_image_transport" value="$(arg use_image_transport)" />
