@@ -244,7 +244,7 @@ else()
           ${OpenCV_LIBRARIES}
           ${catkin_LIBRARIES}
           gpu_imgproc
-          )nvjpegGetErrorString(
+          )
   # target_compile_options(gpu_imgproc_node PRIVATE -Wall -Wextra -Wpedantic -Wunused-function)
 
   install(
