@@ -84,6 +84,9 @@ GpuImgProc::GpuImgProc(const rclcpp::NodeOptions & options)
 #elif TURBOJPEG_AVAILABLE
     raw_compressor_ = std::make_shared<JpegCompressor::CPUCompressor>();
     rect_compressor_ = std::make_shared<JpegCompressor::CPUCompressor>();
+#else
+    RCLCPP_ERROR(this->get_logger(), "No JPEG compressor available");
+    return;
 #endif
 
     rectified_pub_ = this->create_publisher<sensor_msgs::msg::Image>(
@@ -105,11 +108,11 @@ GpuImgProc::~GpuImgProc() {
 }
 
 void GpuImgProc::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg) {
-    RCLCPP_INFO(this->get_logger(), "Received image");
+    RCLCPP_DEBUG(this->get_logger(), "Received image");
 
     std::future<void> rectified_msg;
     if (rectifier_active_) {
-        std::cout << "Rectifying image" << std::endl;
+        RCLCPP_DEBUG(this->get_logger(), "Rectifying image");
         rectified_msg =
             std::async(std::launch::async, [this, msg]() {
                 sensor_msgs::msg::Image::UniquePtr rect_img;
@@ -154,6 +157,11 @@ void GpuImgProc::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg) {
 
 void GpuImgProc::cameraInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg) {
     RCLCPP_INFO(this->get_logger(), "Received camera info");
+
+    if (msg->d.size() == 0 || msg->p.size() == 0) {
+        RCLCPP_ERROR(this->get_logger(), "Camera info message does not contain distortion or projection matrix");
+        return;
+    }
 
     switch(rectifier_impl_) {
         case Rectifier::Implementation::NPP:
