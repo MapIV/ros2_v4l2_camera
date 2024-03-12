@@ -11,7 +11,7 @@
     <arg name="camera_info_url" default="" />
     <arg name="camera_frame_id" default="camera/0" />
 
-    <node pkg="v4l2_camera" type="v4l2_camera_node" name="v4l2_camera" output="screen" respawn="true">
+    <node pkg="v4l2_camera" type="v4l2_camera_node" name="v4l2_camera" output="screen" respawn="true" launch-prefix="taskset -c 1,2,3,4,5,6,7">
         <param name="publish_rate" value="$(arg publish_rate)" />
         <param name="video_device" value="$(arg video_device)" />
         <param name="use_v4l2_buffer_timestamps" value="$(arg use_v4l2_buffer_timestamps)" />

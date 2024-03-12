@@ -38,7 +38,7 @@ using namespace std::chrono_literals;
 namespace v4l2_camera
 {
 V4L2Camera::V4L2Camera(ros::NodeHandle node, ros::NodeHandle private_nh)
-  : image_transport_(private_nh),
+  : image_transport_(node),
     node(node),
     private_nh(private_nh),
     canceled_{false}
