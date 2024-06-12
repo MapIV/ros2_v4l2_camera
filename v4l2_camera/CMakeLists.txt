@@ -11,6 +11,8 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
 endif()
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+
 # if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 #   add_compile_options(-Wall -Wextra -Wpedantic)
 # endif()
@@ -49,6 +51,12 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
+find_package (LibJpegTurbo)
+if (${LibJpegTurbo_FOUND})
+  message("LibJpegTurbo found")
+  add_definitions(-DTURBOJPEG_AVAILABLE)
+endif ()
+
 find_package(CUDA)
 
 if (CUDA_FOUND)
@@ -63,10 +71,12 @@ if (CUDA_FOUND)
   )
   target_include_directories(v4l2_camera PUBLIC
     ${CUDA_INCLUDE_DIR}
+    ${LibJpegTurbo_INCLUDE_DIRS}
   )
   target_link_libraries(v4l2_camera
     ${CUDA_nppicc_LIBRARY}
     ${CUDA_nppisu_LIBRARY}
+    ${LibJpegTurbo_LIBRARY}
   )
 else()
   add_library(v4l2_camera
@@ -74,6 +84,9 @@ else()
     src/v4l2_camera_device.cpp
     src/v4l2_camera_nodelet.cpp
     )
+  target_link_libraries(v4l2_camera
+    ${LibJpegTurbo_LIBRARY}
+  )
 endif()
 
 target_include_directories(v4l2_camera PUBLIC

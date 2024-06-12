@@ -38,6 +38,30 @@
 #include <nppi_support_functions.h>
 #endif
 
+#ifdef TURBOJPEG_AVAILABLE
+#include <sensor_msgs/Image.h>
+#include <sensor_msgs/CompressedImage.h>
+#include <turbojpeg.h>
+
+namespace JpegCompressor {
+using Image = sensor_msgs::Image;
+using CompressedImage = sensor_msgs::CompressedImage;
+typedef std::shared_ptr<CompressedImage> CompressedImagePtr;
+
+class CPUCompressor {
+public:
+    CPUCompressor();
+    ~CPUCompressor();
+
+    CompressedImagePtr compress(const Image &msg, int quality = 90, int format = TJPF_RGB, int sampling = TJ_420);
+private:
+    tjhandle handle_;
+    unsigned char *jpegBuf_;
+    unsigned long size_;
+};
+}
+#endif
+
 namespace v4l2_camera
 {
 #ifdef ENABLE_CUDA
@@ -92,8 +116,12 @@ private:
   
   std::shared_ptr<V4l2CameraDevice> camera_;
 
+  // TurboJpegCompressor
+  JpegCompressor::CPUCompressor* compressor_;
+
   // Publisher used for intra process comm
   ros::Publisher image_pub_;
+  ros::Publisher compressed_image_pub_;
   ros::Publisher info_pub_;
 
   // Publisher used for inter process comm

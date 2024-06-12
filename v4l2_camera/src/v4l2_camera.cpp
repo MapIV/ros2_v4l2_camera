@@ -34,6 +34,60 @@
 #endif
 
 using namespace std::chrono_literals;
+#ifdef TURBOJPEG_AVAILABLE
+#define TEST_ERROR(cond, str) if(cond) { \
+                                        fprintf(stderr, "%s\n", str); }
+
+namespace JpegCompressor {
+CPUCompressor::CPUCompressor()
+    : jpegBuf_(nullptr), size_(0) {
+    handle_ = tjInitCompress();
+}
+
+CPUCompressor::~CPUCompressor() {
+    if (jpegBuf_)
+        tjFree(jpegBuf_);
+    tjDestroy(handle_);
+}
+
+CompressedImagePtr CPUCompressor::compress(const Image &msg, int quality, int format, int sampling) {
+    CompressedImagePtr compressed_msg = std::make_shared<CompressedImage>();
+    compressed_msg->header = msg.header;
+    compressed_msg->format = "jpeg";
+
+    if (jpegBuf_) {
+        tjFree(jpegBuf_);
+        jpegBuf_ = nullptr;
+    }
+
+    int tjres = tjCompress2(handle_,
+                            msg.data.data(),
+                            msg.width,
+                            0,
+                            msg.height,
+                            format,
+                            &jpegBuf_,
+                            &size_,
+                            sampling,
+                            quality,
+                            TJFLAG_FASTDCT);
+
+    // TEST_ERROR(tjres != 0, tjGetErrorStr2(handle_));
+    // TEST_ERROR(tjres != 0, "TODO: ERROR MESSAGE CPUCompressor::compress");
+    if (tjres != 0) {
+        ROS_ERROR("tjCompress2 Error: %s", tjGetErrorStr());
+	exit(1);
+	// return compressed_msg;
+    }
+
+    compressed_msg->data.resize(size_);
+    memcpy(compressed_msg->data.data(), jpegBuf_, size_);
+
+    return compressed_msg;
+}
+
+}
+#endif
 
 namespace v4l2_camera
 {
@@ -41,7 +95,10 @@ V4L2Camera::V4L2Camera(ros::NodeHandle node, ros::NodeHandle private_nh)
   : image_transport_(node),
     node(node),
     private_nh(private_nh),
-    canceled_{false}
+    canceled_{false},
+#ifdef TURBOJPEG_AVAILABLE
+    compressor_(nullptr)
+#endif
 {
   private_nh.getParam("publish_rate", publish_rate_);
   private_nh.getParam("video_device", device);
@@ -66,6 +123,9 @@ V4L2Camera::V4L2Camera(ros::NodeHandle node, ros::NodeHandle private_nh)
   } else {
     image_pub_ = node.advertise<sensor_msgs::Image>("image_raw", 10);
     info_pub_ = node.advertise<sensor_msgs::CameraInfo>("camera_info", 10);
+#ifdef TURBOJPEG_AVAILABLE
+    compressed_image_pub_ = node.advertise<sensor_msgs::CompressedImage>("image_raw/compressed", 10);
+#endif
   }
 
   ros::Duration timestamp_offset_duration(0, timestamp_offset);
@@ -89,6 +149,10 @@ V4L2Camera::V4L2Camera(ros::NodeHandle node, ros::NodeHandle private_nh)
   if (!camera_->start()) {
     exit(1);
   }
+
+#ifdef TURBOJPEG_AVAILABLE
+  compressor_ = new JpegCompressor::CPUCompressor();
+#endif
 
   // Start capture thread
   capture_thread_ = std::thread{
@@ -133,6 +197,10 @@ V4L2Camera::V4L2Camera(ros::NodeHandle node, ros::NodeHandle private_nh)
         } else {
           image_pub_.publish(*img);
           info_pub_.publish(*ci);
+#ifdef TURBOJPEG_AVAILABLE
+          auto compressed_img = compressor_->compress(*img);
+          compressed_image_pub_.publish(*compressed_img);
+#endif
         }
       }
     }
@@ -558,5 +626,11 @@ V4L2Camera::~V4L2Camera()
   if (capture_thread_.joinable()) {
     capture_thread_.join();
   }
+#ifdef TURBOJPEG_AVAILABLE
+  if (compressor_) {
+    delete compressor_;
+    compressor_ = nullptr;
+  }
+#endif
 }
 }  // namespace v4l2_camera
