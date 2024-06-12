@@ -34,7 +34,6 @@
 #endif
 
 using namespace std::chrono_literals;
-#ifdef TURBOJPEG_AVAILABLE
 #define TEST_ERROR(cond, str) if(cond) { \
                                         fprintf(stderr, "%s\n", str); }
 
@@ -87,7 +86,6 @@ CompressedImagePtr CPUCompressor::compress(const Image &msg, int quality, int fo
 }
 
 }
-#endif
 
 namespace v4l2_camera
 {
@@ -96,9 +94,7 @@ V4L2Camera::V4L2Camera(ros::NodeHandle node, ros::NodeHandle private_nh)
     node(node),
     private_nh(private_nh),
     canceled_{false},
-#ifdef TURBOJPEG_AVAILABLE
     compressor_(nullptr)
-#endif
 {
   private_nh.getParam("publish_rate", publish_rate_);
   private_nh.getParam("video_device", device);
@@ -123,9 +119,7 @@ V4L2Camera::V4L2Camera(ros::NodeHandle node, ros::NodeHandle private_nh)
   } else {
     image_pub_ = node.advertise<sensor_msgs::Image>("image_raw", 10);
     info_pub_ = node.advertise<sensor_msgs::CameraInfo>("camera_info", 10);
-#ifdef TURBOJPEG_AVAILABLE
     compressed_image_pub_ = node.advertise<sensor_msgs::CompressedImage>("image_raw/compressed", 10);
-#endif
   }
 
   ros::Duration timestamp_offset_duration(0, timestamp_offset);
@@ -150,9 +144,7 @@ V4L2Camera::V4L2Camera(ros::NodeHandle node, ros::NodeHandle private_nh)
     exit(1);
   }
 
-#ifdef TURBOJPEG_AVAILABLE
   compressor_ = new JpegCompressor::CPUCompressor();
-#endif
 
   // Start capture thread
   capture_thread_ = std::thread{
@@ -197,10 +189,8 @@ V4L2Camera::V4L2Camera(ros::NodeHandle node, ros::NodeHandle private_nh)
         } else {
           image_pub_.publish(*img);
           info_pub_.publish(*ci);
-#ifdef TURBOJPEG_AVAILABLE
           auto compressed_img = compressor_->compress(*img);
           compressed_image_pub_.publish(*compressed_img);
-#endif
         }
       }
     }
@@ -626,11 +616,9 @@ V4L2Camera::~V4L2Camera()
   if (capture_thread_.joinable()) {
     capture_thread_.join();
   }
-#ifdef TURBOJPEG_AVAILABLE
   if (compressor_) {
     delete compressor_;
     compressor_ = nullptr;
   }
-#endif
 }
 }  // namespace v4l2_camera

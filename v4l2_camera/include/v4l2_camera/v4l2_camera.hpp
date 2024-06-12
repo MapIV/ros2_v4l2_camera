@@ -38,7 +38,6 @@
 #include <nppi_support_functions.h>
 #endif
 
-#ifdef TURBOJPEG_AVAILABLE
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/CompressedImage.h>
 #include <turbojpeg.h>
@@ -60,7 +59,6 @@ private:
     unsigned long size_;
 };
 }
-#endif
 
 namespace v4l2_camera
 {
