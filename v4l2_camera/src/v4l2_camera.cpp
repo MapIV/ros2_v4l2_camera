@@ -74,9 +74,8 @@ CompressedImagePtr CPUCompressor::compress(const Image &msg, int quality, int fo
     // TEST_ERROR(tjres != 0, tjGetErrorStr2(handle_));
     // TEST_ERROR(tjres != 0, "TODO: ERROR MESSAGE CPUCompressor::compress");
     if (tjres != 0) {
-        ROS_ERROR("tjCompress2 Error: %s", tjGetErrorStr());
-	exit(1);
-	// return compressed_msg;
+        ROS_WARN("tjCompress2 Error: %s", tjGetErrorStr());
+        return compressed_msg;
     }
 
     compressed_msg->data.resize(size_);
