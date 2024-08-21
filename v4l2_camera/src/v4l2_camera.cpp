@@ -281,8 +281,8 @@ void V4L2Camera::createParameters()
   }
 
   ROS_INFO("Image width & height");
-  private_nh.param<int>("image_size",image_size_width, 640);
-  private_nh.param<int>("image_size",image_size_height, 480);
+  private_nh.param<int>("image_size_width",image_size_width, 640);
+  private_nh.param<int>("image_size_height",image_size_height, 480);
   image_size = {image_size_width, image_size_height};
   requestImageSize(image_size);
 
