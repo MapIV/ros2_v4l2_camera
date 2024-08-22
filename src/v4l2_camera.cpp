@@ -35,10 +35,67 @@
 #include <nppi_color_conversion.h>
 #endif
 
+#include <cv_bridge/cv_bridge.h>
+
 using namespace std::chrono_literals;
 
 namespace v4l2_camera
 {
+
+static sensor_msgs::msg::Image::UniquePtr resize_img(
+  sensor_msgs::msg::Image::UniquePtr image_msg,
+  int width, int height)
+{
+  // RCLCPP_INFO(get_logger(), "width: %d, height: %d", width, height);
+
+  if (width == -1 || height == -1) {
+    return image_msg;
+  }
+
+  cv_bridge::CvImagePtr cv_ptr;
+  cv_ptr = cv_bridge::toCvCopy(*image_msg);
+
+  cv::resize(cv_ptr->image, cv_ptr->image, cv::Size(width, height), 0, 0, 1);
+
+  return std::make_unique<sensor_msgs::msg::Image>(*cv_ptr->toImageMsg());
+}
+
+static sensor_msgs::msg::CameraInfo::UniquePtr resize_info(
+  sensor_msgs::msg::CameraInfo::UniquePtr info_msg,
+  int width, int height)
+{
+  // RCLCPP_INFO(get_logger(), "width: %d, height: %d", width, height);
+
+  if (width == -1 || height == -1) {
+    return info_msg;
+  }
+
+  double scale_y;
+  double scale_x;
+
+  scale_y = static_cast<double>(height) / info_msg->height;
+  scale_x = static_cast<double>(width) / info_msg->width;
+  info_msg->height = height;
+  info_msg->width = width;
+
+  info_msg->k[0] = info_msg->k[0] * scale_x;  // fx
+  info_msg->k[2] = info_msg->k[2] * scale_x;  // cx
+  info_msg->k[4] = info_msg->k[4] * scale_y;  // fy
+  info_msg->k[5] = info_msg->k[5] * scale_y;  // cy
+
+  info_msg->p[0] = info_msg->p[0] * scale_x;  // fx
+  info_msg->p[2] = info_msg->p[2] * scale_x;  // cx
+  info_msg->p[3] = info_msg->p[3] * scale_x;  // T
+  info_msg->p[5] = info_msg->p[5] * scale_y;  // fy
+  info_msg->p[6] = info_msg->p[6] * scale_y;  // cy
+
+  info_msg->roi.x_offset = static_cast<int>(info_msg->roi.x_offset * scale_x);
+  info_msg->roi.y_offset = static_cast<int>(info_msg->roi.y_offset * scale_y);
+  info_msg->roi.width = static_cast<int>(info_msg->roi.width * scale_x);
+  info_msg->roi.height = static_cast<int>(info_msg->roi.height * scale_y);
+
+  return info_msg;
+}
 
 V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
 : rclcpp::Node{"v4l2_camera", options},
@@ -72,6 +129,11 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
     image_pub_ = create_publisher<sensor_msgs::msg::Image>("image_raw", qos);
     info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", qos);
   }
+
+  // resize_width_ = declare_parameter<int>("resize_width", -1);
+  // resize_height_ = declare_parameter<int>("resize_height", -1);
+  resize_width_ = 1920;
+  resize_height_ = 1080;
 
   // Prepare camera
   auto device_descriptor = rcl_interfaces::msg::ParameterDescriptor{};
@@ -145,12 +207,22 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
         ci->header.frame_id = camera_frame_id_;
         publish_next_frame_ = publish_rate_ < 0;
 
+        // auto resized_img = resize_img(std::move(img), resize_width_, resize_height_);
+        // auto resized_info = resize_info(std::move(ci), resize_width_, resize_height_);
+
         if (use_image_transport_) {
           camera_transport_pub_.publish(*img, *ci);
         } else {
           image_pub_->publish(std::move(img));
           info_pub_->publish(std::move(ci));
         }
+
+        // if (use_image_transport_) {
+        //   camera_transport_pub_.publish(*resized_img, *resized_info);
+        // } else {
+        //   image_pub_->publish(std::move(resized_img));
+        //   info_pub_->publish(std::move(resized_info));
+        // }
       }
     }
   };

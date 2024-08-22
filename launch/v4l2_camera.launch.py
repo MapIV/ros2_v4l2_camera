@@ -134,6 +134,10 @@ def generate_launch_description():
                    'otherwise, will be the system time when the buffer is read')
     add_launch_arg('use_image_transport', 'true',
                    description='flag to launch image_transport node')
+    # add_launch_arg('resize_width', "-1",
+    #                description='width to resize images to')
+    # add_launch_arg('resize_height', "-1",
+    #                description='height to resize images to')
 
     return LaunchDescription(
         [

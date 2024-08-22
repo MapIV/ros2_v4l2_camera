@@ -51,9 +51,13 @@ ament_target_dependencies(v4l2_camera
   "rclcpp"
   "rclcpp_components"
   "image_transport"
-  "camera_info_manager")
+  "camera_info_manager"
+  "cv_bridge"
+  "OpenCV"
+  )
+  
 
-target_compile_options(v4l2_camera PRIVATE -Werror)
+# target_compile_options(v4l2_camera PRIVATE -Werror)
 
 # Causes the visibility macros to use dllexport rather than dllimport,
 # which is appropriate when building the dll but not consuming it.

@@ -120,6 +120,9 @@ private:
   bool publish_next_frame_;
   bool use_image_transport_;
 
+  int resize_width_;
+  int resize_height_;
+
 #ifdef ENABLE_CUDA
   // Memory region to communicate with GPU
   std::allocator<GPUMemoryManager> allocator_;
