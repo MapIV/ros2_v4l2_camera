@@ -20,7 +20,7 @@ find_package(ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies()
 find_package(CUDA)
 
-if (CUDA_FOUND)
+if (CUDA_FOUND AND CUDA_nppicc_LIBRARY AND CUDA_nppisu_LIBRARY)
   message(STATUS "CUDA Support is enabled in ${PROJECT_NAME}")
   cuda_add_library(v4l2_camera
     src/v4l2_camera.cpp
