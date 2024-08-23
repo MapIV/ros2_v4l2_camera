@@ -23,7 +23,7 @@
         <param name="use_v4l2_buffer_timestamps" value="$(arg use_v4l2_buffer_timestamps)" />
         <param name="timestamp_offset" value="$(arg timestamp_offset)" />
         <param name="output_encoding" value="$(arg output_encoding)" />
-        <param name="camera_info_url" value="" />
+	<param name="camera_info_url" value="file://$(find v4l2_camera)/launch/camera_intrinsics.yaml" />
         <param name="camera_frame_id" value="camera/0" />
         <param name="pixel_format" value="$(arg pixel_format)" />
         <param name="use_image_transport" value="$(arg use_image_transport)" />
