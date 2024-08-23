@@ -58,7 +58,7 @@ static sensor_msgs::msg::Image::SharedPtr resize_img(
   cv::Mat resized_img;
   cv::resize(cv_ptr->image, resized_img, cv::Size(width, height), 0, 0, 1);
 
-  return cv_bridge::CvImage(std_msgs::msg::Header(), image_msg->encoding, resized_img).toImageMsg();
+  return cv_bridge::CvImage(image_msg->header, image_msg->encoding, resized_img).toImageMsg();
 }
 
 static sensor_msgs::msg::CameraInfo::UniquePtr resize_info(
