@@ -6,12 +6,18 @@
     <arg name="timestamp_offset" default="0.0" />
     <arg name="output_encoding" default="rgb8" />
     <arg name="pixel_format" default="YUYV" />
-    <arg name="use_image_transport" default="True" />
+    <arg name="use_image_transport" default="False" />
     <arg name="video_device" default="/dev/video0" />
     <arg name="camera_info_url" default="" />
     <arg name="camera_frame_id" default="camera/0" />
+    <arg name="image_size_width" default="2880" />
+    <arg name="image_size_height" default="1860" />
+    <arg name="jpeg_quality" default="90" />
 
+    <!--
     <node pkg="v4l2_camera" type="v4l2_camera_node" name="v4l2_camera" output="screen" respawn="true" launch-prefix="taskset -c 1,2,3,4,5,6,7">
+    -->
+    <node pkg="v4l2_camera" type="v4l2_camera_node" name="v4l2_camera" output="screen" respawn="true">
         <param name="publish_rate" value="$(arg publish_rate)" />
         <param name="video_device" value="/dev/video0" />
         <param name="use_v4l2_buffer_timestamps" value="$(arg use_v4l2_buffer_timestamps)" />
@@ -21,7 +27,11 @@
         <param name="camera_frame_id" value="camera/0" />
         <param name="pixel_format" value="$(arg pixel_format)" />
         <param name="use_image_transport" value="$(arg use_image_transport)" />
+	<param name="image_size_width" value="$(arg image_size_width)" />
+	<param name="image_size_height" value="$(arg image_size_height)" />
+        <param name="jpeg_quality" value="$(arg jpeg_quality)" />
     </node>
+    <!--
 <node pkg="v4l2_camera" type="v4l2_camera_node" name="v4l2_camera" output="screen" respawn="true" launch-prefix="taskset -c 1,2,3,4,5,6,7">
         <param name="publish_rate" value="$(arg publish_rate)" />
         <param name="video_device" value="/dev/video1" />
@@ -55,4 +65,5 @@
         <param name="pixel_format" value="$(arg pixel_format)" />
         <param name="use_image_transport" value="$(arg use_image_transport)" />
     </node>
+    -->
 </launch>

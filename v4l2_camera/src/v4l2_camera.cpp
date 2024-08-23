@@ -100,6 +100,7 @@ V4L2Camera::V4L2Camera(ros::NodeHandle node, ros::NodeHandle private_nh)
   private_nh.getParam("use_v4l2_buffer_timestamps", use_v4l2_buffer_timestamps);
   private_nh.getParam("timestamp_offset", timestamp_offset);
   private_nh.getParam("use_image_transport", use_image_transport_);
+  private_nh.getParam("jpeg_quality", jpeg_quality_);
 
   if(std::abs(publish_rate_) < std::numeric_limits<double>::epsilon()){
     ROS_WARN("Invalid publish_rate = 0. Use default value -1 instead");
@@ -188,6 +189,7 @@ V4L2Camera::V4L2Camera(ros::NodeHandle node, ros::NodeHandle private_nh)
         } else {
           image_pub_.publish(*img);
           info_pub_.publish(*ci);
+          //auto compressed_img = compressor_->compress(*img, jpeg_quality_);
           auto compressed_img = compressor_->compress(*img);
           compressed_image_pub_.publish(*compressed_img);
         }
