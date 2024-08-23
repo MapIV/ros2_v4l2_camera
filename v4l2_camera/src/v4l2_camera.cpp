@@ -189,8 +189,7 @@ V4L2Camera::V4L2Camera(ros::NodeHandle node, ros::NodeHandle private_nh)
         } else {
           image_pub_.publish(*img);
           info_pub_.publish(*ci);
-          //auto compressed_img = compressor_->compress(*img, jpeg_quality_);
-          auto compressed_img = compressor_->compress(*img);
+          auto compressed_img = compressor_->compress(*img, jpeg_quality_);
           compressed_image_pub_.publish(*compressed_img);
         }
       }
