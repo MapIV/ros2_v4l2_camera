@@ -42,7 +42,7 @@ using namespace std::chrono_literals;
 namespace v4l2_camera
 {
 
-static sensor_msgs::msg::Image::UniquePtr resize_img(
+static sensor_msgs::msg::Image::SharedPtr resize_img(
   sensor_msgs::msg::Image::UniquePtr image_msg,
   int width, int height)
 {
@@ -55,9 +55,10 @@ static sensor_msgs::msg::Image::UniquePtr resize_img(
   cv_bridge::CvImagePtr cv_ptr;
   cv_ptr = cv_bridge::toCvCopy(*image_msg);
 
-  cv::resize(cv_ptr->image, cv_ptr->image, cv::Size(width, height), 0, 0, 1);
+  cv::Mat resized_img;
+  cv::resize(cv_ptr->image, resized_img, cv::Size(width, height), 0, 0, 1);
 
-  return std::make_unique<sensor_msgs::msg::Image>(*cv_ptr->toImageMsg());
+  return cv_bridge::CvImage(std_msgs::msg::Header(), image_msg->encoding, resized_img).toImageMsg();
 }
 
 static sensor_msgs::msg::CameraInfo::UniquePtr resize_info(
@@ -211,7 +212,7 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
         if (use_image_transport_) {
           camera_transport_pub_.publish(*resized_img, *resized_info);
         } else {
-          image_pub_->publish(std::move(resized_img));
+          image_pub_->publish(*resized_img);
           info_pub_->publish(std::move(resized_info));
         }
       }
