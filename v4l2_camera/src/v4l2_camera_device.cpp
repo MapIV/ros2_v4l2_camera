@@ -43,7 +43,7 @@ bool V4l2CameraDevice::open()
 {
   // Check if TSC offset applies
   setTSCOffset();
-  ROS_INFO_STREAM("device" << device_);
+  ROS_INFO_STREAM("device: " << device_);
   fd_ = ::open(device_.c_str(), O_RDWR);
 
   if (fd_ < 0) {
