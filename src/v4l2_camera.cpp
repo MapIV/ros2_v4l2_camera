@@ -130,10 +130,8 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
     info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", qos);
   }
 
-  // resize_width_ = declare_parameter<int>("resize_width", -1);
-  // resize_height_ = declare_parameter<int>("resize_height", -1);
-  resize_width_ = 1920;
-  resize_height_ = 1080;
+  resize_width_ = declare_parameter<int>("resize_width", -1);
+  resize_height_ = declare_parameter<int>("resize_height", -1);
 
   // Prepare camera
   auto device_descriptor = rcl_interfaces::msg::ParameterDescriptor{};
@@ -207,22 +205,15 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
         ci->header.frame_id = camera_frame_id_;
         publish_next_frame_ = publish_rate_ < 0;
 
-        // auto resized_img = resize_img(std::move(img), resize_width_, resize_height_);
-        // auto resized_info = resize_info(std::move(ci), resize_width_, resize_height_);
+        auto resized_img = resize_img(std::move(img), resize_width_, resize_height_);
+        auto resized_info = resize_info(std::move(ci), resize_width_, resize_height_);
 
         if (use_image_transport_) {
-          camera_transport_pub_.publish(*img, *ci);
+          camera_transport_pub_.publish(*resized_img, *resized_info);
         } else {
-          image_pub_->publish(std::move(img));
-          info_pub_->publish(std::move(ci));
+          image_pub_->publish(std::move(resized_img));
+          info_pub_->publish(std::move(resized_info));
         }
-
-        // if (use_image_transport_) {
-        //   camera_transport_pub_.publish(*resized_img, *resized_info);
-        // } else {
-        //   image_pub_->publish(std::move(resized_img));
-        //   info_pub_->publish(std::move(resized_info));
-        // }
       }
     }
   };

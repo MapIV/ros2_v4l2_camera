@@ -73,6 +73,8 @@ def launch_setup(context, *args, **kwargs):
                     "publish_rate": LaunchConfiguration("publish_rate"),
                     "use_v4l2_buffer_timestamps": LaunchConfiguration("use_v4l2_buffer_timestamps"),
                     "use_image_transport": LaunchConfiguration("use_image_transport"),
+                    "resize_width": LaunchConfiguration("resize_width"),
+                    "resize_height": LaunchConfiguration("resize_height"),
                 },
             ],
             extra_arguments=[{"use_intra_process_comms": LaunchConfiguration("use_intra_process")}],
@@ -134,10 +136,10 @@ def generate_launch_description():
                    'otherwise, will be the system time when the buffer is read')
     add_launch_arg('use_image_transport', 'true',
                    description='flag to launch image_transport node')
-    # add_launch_arg('resize_width', "-1",
-    #                description='width to resize images to')
-    # add_launch_arg('resize_height', "-1",
-    #                description='height to resize images to')
+    add_launch_arg('resize_width', "-1",
+                   description='width to resize images to')
+    add_launch_arg('resize_height', "-1",
+                   description='height to resize images to')
 
     return LaunchDescription(
         [
