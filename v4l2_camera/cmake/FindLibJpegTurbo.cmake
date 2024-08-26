@@ -15,13 +15,13 @@ libfind_pkg_check_modules(LibJpegTurbo_PKGCONF LibJpegTurbo)
 # Include dir
 find_path(LibJpegTurbo_INCLUDE_DIRS
         NAMES turbojpeg.h
-        HINTS ${LibJpegTurbo_PKGCONF_INCLUDE_DIRS} /opt/libjpeg-turbo/include /usr/include/
+        HINTS ${LibJpegTurbo_PKGCONF_INCLUDE_DIRS} /opt/libjpeg-turbo/include /opt/libjpeg-turbo/include/ /usr/include/
         )
 
 # Finally the library itself
 find_library(LibJpegTurbo_LIBRARY
         NAMES turbojpeg
-        HINTS ${LibJpegTurbo_PKGCONF_LIBRARY_DIRS} /opt/libjpeg-turbo/lib /usr/lib/
+        HINTS ${LibJpegTurbo_PKGCONF_LIBRARY_DIRS} /opt/libjpeg-turbo/lib /opt/libjpeg-turbo/lib64 /usr/lib/
         )
 
 # Set the include dir variables and the libraries and let libfind_process do the rest.

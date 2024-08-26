@@ -51,13 +51,14 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-find_package (LibJpegTurbo)
+find_package (LibJpegTurbo REQUIRED)
 if (${LibJpegTurbo_FOUND})
   message("LibJpegTurbo found")
   add_definitions(-DTURBOJPEG_AVAILABLE)
+  message(${LibJpegTurbo_INCLUDE_DIRS})
 endif ()
 
-find_package(CUDA)
+# find_package(CUDA)
 
 if (CUDA_FOUND)
   message(STATUS "CUDA Support is enabled in ${PROJECT_NAME}")
@@ -84,6 +85,10 @@ else()
     src/v4l2_camera_device.cpp
     src/v4l2_camera_nodelet.cpp
     )
+    target_include_directories(v4l2_camera PUBLIC
+    
+    ${LibJpegTurbo_INCLUDE_DIRS}
+   )
   target_link_libraries(v4l2_camera
     ${LibJpegTurbo_LIBRARY}
   )

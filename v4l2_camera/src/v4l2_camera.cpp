@@ -499,6 +499,49 @@ static void yuyv2rgb(unsigned char const * YUV, unsigned char * RGB, int NumPixe
   }
 }
 
+static void UYUV2RGB(
+  const unsigned char y, const unsigned char u, const unsigned char v, unsigned char * r,
+  unsigned char * g, unsigned char * b) {
+
+    const int y2 = static_cast<int>(y);
+    const int u2 = static_cast<int>(u) - 128;
+    const int v2 = static_cast<int>(v) - 128;
+
+    int r2 = y2 + ((v2 * 37221) >> 15);
+    int g2 = y2 - (((u2 * 12975) + (v2 * 18949)) >> 15);
+    int b2 = y2 + ((u2 * 66883) >> 15);
+
+    // Cap the values.
+    *r = CLIPVALUE(r2);
+    *g = CLIPVALUE(g2);
+    *b = CLIPVALUE(b2);
+}
+
+static void uyuv2rgb(unsigned char const * UYUV, unsigned char * RGB, int NumPixels) {
+    int i, j;
+    unsigned char y0, y1, u, v;
+    unsigned char r, g, b;
+
+    for (i = 0, j = 0; i < (NumPixels << 1); i += 4, j += 6) {
+        u = UYUV[i + 0];
+        y0 = UYUV[i + 1];
+        v = UYUV[i + 2];
+        y1 = UYUV[i + 3];
+
+        UYUV2RGB(y0, u, v, &r, &g, &b);
+        RGB[j + 0] = r;
+        RGB[j + 1] = g;
+        RGB[j + 2] = b;
+
+        UYUV2RGB(y1, u, v, &r, &g, &b);
+        RGB[j + 3] = r;
+        RGB[j + 4] = g;
+        RGB[j + 5] = b;
+    }
+}
+
+
+
 sensor_msgs::ImagePtr V4L2Camera::convert(sensor_msgs::Image& img)
 {
   // TODO(sander): temporary until cv_bridge and image_proc are available in ROS 2
@@ -513,17 +556,20 @@ sensor_msgs::ImagePtr V4L2Camera::convert(sensor_msgs::Image& img)
     outImg->encoding = output_encoding_;
     outImg->data.resize(outImg->height * outImg->step);
     for (auto i = 0u; i < outImg->height; ++i) {
-      yuyv2rgb(
+      uyuv2rgb(
         img.data.data() + i * img.step, outImg->data.data() + i * outImg->step,
         outImg->width);
     }
     return outImg;
-  } else {
+  } 
+  
+  else {
     ROS_WARN_ONCE(
       "Conversion not supported yet: %s -> %s", img.encoding.c_str(), output_encoding_.c_str());
     return nullptr;
   }
 }
+
 
 #ifdef ENABLE_CUDA
 void cudaErrorCheck(const cudaError_t e)
