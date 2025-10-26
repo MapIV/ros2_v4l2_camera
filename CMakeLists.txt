@@ -6,9 +6,9 @@ if(NOT CMAKE_C_STANDARD)
   set(CMAKE_C_STANDARD 99)
 endif()
 
-# Default to C++14
+# Default to C++17
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
+  set(CMAKE_CXX_STANDARD 17)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -51,7 +51,8 @@ ament_target_dependencies(v4l2_camera
   "rclcpp"
   "rclcpp_components"
   "image_transport"
-  "camera_info_manager")
+  "camera_info_manager"
+  "diagnostic_updater")
 
 target_compile_options(v4l2_camera PRIVATE -Werror)
 

@@ -67,10 +67,14 @@ def launch_setup(context, *args, **kwargs):
             ],
             parameters=[
                 load_composable_node_param("v4l2_camera_param_path"),
+                load_composable_node_param("rate_diagnostics_param_path"),
                 {
                     "camera_info_url": LaunchConfiguration("camera_info_url"),
                     "use_sensor_data_qos": LaunchConfiguration("use_sensor_data_qos"),
                     "publish_rate": LaunchConfiguration("publish_rate"),
+                    "use_v4l2_buffer_timestamps": LaunchConfiguration("use_v4l2_buffer_timestamps"),
+                    "use_image_transport": LaunchConfiguration("use_image_transport"),
+                    "hardware_id": LaunchConfiguration("hardware_id"),
                 },
             ],
             extra_arguments=[{"use_intra_process_comms": LaunchConfiguration("use_intra_process")}],
@@ -116,6 +120,8 @@ def generate_launch_description():
                    description='namespace in which the nodes launched')
     add_launch_arg('v4l2_camera_param_path',
                    description='path to the yaml file that contains parameters for v4l2_camera node')
+    add_launch_arg('rate_diagnostics_param_path',
+                   description='path to the yaml file that contains parameters for rate diagnostics')
     add_launch_arg('camera_info_url',
                    description='url to the yaml file that contains camera\'s intrinsic paramters')
     add_launch_arg('use_intra_process', 'False',
@@ -126,6 +132,14 @@ def generate_launch_description():
                    'otherwise be RELIABLE')
     add_launch_arg('publish_rate', "-1.0",
                    description='publish frame number per second. value <= 0 means no limitation on publish rate')
+    add_launch_arg('use_v4l2_buffer_timestamps', 'true',
+                   description='flag to use v4l2 buffer timestamps. '
+                   'If true, the image timestamps will be applied from the v4l2 buffer, '
+                   'otherwise, will be the system time when the buffer is read')
+    add_launch_arg('use_image_transport', 'true',
+                   description='flag to launch image_transport node')
+    add_launch_arg('hardware_id',
+                   description='hardware id of the camera')
 
     return LaunchDescription(
         [

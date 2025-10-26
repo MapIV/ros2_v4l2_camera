@@ -13,14 +13,18 @@
 // limitations under the License.
 
 #include "v4l2_camera/v4l2_camera.hpp"
+#include "v4l2_camera/rate_bound_status.hpp"
 
+#include <diagnostic_updater/update_functions.hpp>
 #include <rclcpp/qos.hpp>
 #include <sensor_msgs/image_encodings.hpp>
+#include <diagnostic_updater/publisher.hpp>
 
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <memory>
+#include <tuple>
 #include <utility>
 #include <vector>
 #include <algorithm>
@@ -39,6 +43,96 @@ using namespace std::chrono_literals;
 
 namespace v4l2_camera
 {
+
+static void diagnoseDeviceNodeExistence(diagnostic_updater::DiagnosticStatusWrapper &stat,
+                                        const std::string device_name,
+                                        bool node_exist,
+                                        std::mutex& mtx)
+{
+  std::lock_guard<std::mutex> lock(mtx);
+  if (node_exist) {
+    stat.summaryf(
+        diagnostic_msgs::msg::DiagnosticStatus::OK,
+        "%s is available", device_name.c_str());
+    stat.add("Device node existence", "OK");
+  } else {
+    stat.summaryf(
+        diagnostic_msgs::msg::DiagnosticStatus::ERROR,
+        "%s is unavailable", device_name.c_str());
+    stat.add("Device node existence", "ERROR");
+  }
+}
+
+static void
+diagnoseV4l2BufferFlag(diagnostic_updater::DiagnosticStatusWrapper &stat,
+                       const bool &is_v4l2_buffer_flag_error_detected,
+                       std::mutex& mtx)
+{
+  std::lock_guard<std::mutex> lock(mtx);
+  if (is_v4l2_buffer_flag_error_detected) {
+    stat.summary(diagnostic_msgs::msg::DiagnosticStatus::WARN,
+                 "Data might have been corrupted");
+    stat.add("Buffer flag status", "WARN");
+  } else {
+    stat.summary(diagnostic_msgs::msg::DiagnosticStatus::OK,
+                 "Data is dequeued successfully");
+    stat.add("Buffer flag status", "OK");
+  }
+}  // static void DiagnoseV4l2BufferFlag
+
+static void diagnoseStreamLiveness(
+    diagnostic_updater::DiagnosticStatusWrapper &stat,
+    const std::optional<uint32_t> &sequence, uint32_t &max_sequence_value,
+    const std::optional<timeval> &raw_timestamp, int64_t &max_timestamp_value,
+    bool &is_frame_updated, std::mutex& mtx)
+{
+  std::lock_guard<std::mutex> lock(mtx);
+  if (!sequence || !raw_timestamp) {
+    stat.summary(diagnostic_msgs::msg::DiagnosticStatus::ERROR,
+                 "Failed to dequeue/enqueue v4l2_buffer");
+    return;
+  }
+
+  int64_t raw_timestamp_value = static_cast<int64_t>(raw_timestamp.value().tv_sec) * 1e9
+                                + static_cast<int64_t>(raw_timestamp.value().tv_usec) * 1e3;
+
+  auto is_error_condition = [&is_frame_updated](auto& lhs, auto& rhs){
+    bool compare_result;
+    if (is_frame_updated) {
+      // If frame is updated, LHS should be greater than RHS,
+      // so error condition will be the logical NOT.
+      compare_result = (lhs <= rhs);
+    } else {
+      // If frame is not updated yet, LHS and RHS value may be the same
+      compare_result = (lhs < rhs);
+    }
+    return compare_result;
+  };
+
+  if (is_error_condition(sequence.value(), max_sequence_value)) {
+    // sequence should increase monotonically
+    stat.summary(diagnostic_msgs::msg::DiagnosticStatus::ERROR,
+                 "Invalid sequence value is detected");
+    stat.add("Stream liveness", "ERROR");
+  } else if (is_error_condition(raw_timestamp_value, max_timestamp_value)) {
+    // raw timestamp should also increase monotonically
+    stat.summary(diagnostic_msgs::msg::DiagnosticStatus::ERROR,
+                 "Invalid timestamp value is detected");
+    stat.add("Stream liveness", "ERROR");
+  } else {
+    stat.summary(diagnostic_msgs::msg::DiagnosticStatus::OK,
+                 "Sequence and timestamp value are valid");
+    stat.add("Stream liveness", "OK");
+    max_sequence_value = sequence.value();
+    max_timestamp_value = raw_timestamp_value;
+  }
+
+  stat.addf("Sequence", "%u", sequence);
+  stat.addf("Raw timestamp", "%lu", raw_timestamp_value);
+
+  // reset flag
+  is_frame_updated = false;
+}  // static void diagnoseStreamLiveness
 
 V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
 : rclcpp::Node{"v4l2_camera", options},
@@ -62,8 +156,16 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
     publish_next_frame_ = true;
   }
   const auto qos = use_sensor_data_qos ? rclcpp::SensorDataQoS() : rclcpp::QoS(10);
-  camera_transport_pub_ = image_transport::create_camera_publisher(this, "image_raw",
-                                                                   qos.get_rmw_qos_profile());
+
+  use_image_transport_ = declare_parameter("use_image_transport", true);
+
+  if (use_image_transport_) {
+    camera_transport_pub_ = image_transport::create_camera_publisher(this, "image_raw",
+                                                                    qos.get_rmw_qos_profile());
+  } else {
+    image_pub_ = create_publisher<sensor_msgs::msg::Image>("image_raw", qos);
+    info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", qos);
+  }
 
   // Prepare camera
   auto device_descriptor = rcl_interfaces::msg::ParameterDescriptor{};
@@ -80,10 +182,35 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   auto timestamp_offset = declare_parameter<int64_t>("timestamp_offset", 0, timestamp_offset_descriptor);
   rclcpp::Duration timestamp_offset_duration = rclcpp::Duration::from_nanoseconds(timestamp_offset);
 
+  // Prepare diagnostics
+  auto hardware_id = declare_parameter<std::string>("hardware_id", "");
+  min_ok_rate_ = declare_parameter<double>("min_ok_rate", 9.0);
+  max_ok_rate_ = declare_parameter<double>("max_ok_rate", 11.0);
+  min_warn_rate_ = declare_parameter<double>("min_warn_rate", 8.0);
+  max_warn_rate_ = declare_parameter<double>("max_warn_rate", 12.0);
+  observed_frames_transition_ = declare_parameter<int>("observed_frames_transition", 3);
+
+  diag_updater_ = std::make_shared<diagnostic_updater::Updater>(this);
+  diag_updater_->setHardwareID(hardware_id.empty() ? "none" : hardware_id);
+  diag_composer_ = std::make_shared<diagnostic_updater::CompositeDiagnosticTask>(
+      hardware_id.empty() ? "_diagnostics" : hardware_id + "_diagnostics");
+
   camera_ = std::make_shared<V4l2CameraDevice>(device, use_v4l2_buffer_timestamps, timestamp_offset_duration);
 
   if (!camera_->open()) {
+    device_node_existence_diag_ = std::make_shared<diagnostic_updater::FunctionDiagnosticTask>(
+        "device node existence", std::bind(&diagnoseDeviceNodeExistence, std::placeholders::_1,
+                                           device, false, std::ref(lock_)));
+
+    diag_composer_->addTask(device_node_existence_diag_.get());
+    this->diag_updater_->add(*diag_composer_);
+    this->diag_updater_->force_update();
     return;
+  } else {
+    device_node_existence_diag_ = std::make_shared<diagnostic_updater::FunctionDiagnosticTask>(
+        "device node existence", std::bind(&diagnoseDeviceNodeExistence, std::placeholders::_1,
+                                           device, true, std::ref(lock_)));
+    diag_composer_->addTask(device_node_existence_diag_.get());
   }
 
   cinfo_ = std::make_shared<camera_info_manager::CameraInfoManager>(this, camera_->getCameraName());
@@ -103,9 +230,63 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   // Start capture thread
   capture_thread_ = std::thread{
     [this]() -> void {
+      if (!time_per_frame_ || !min_ok_rate_ || !max_ok_rate_ || !min_warn_rate_ || !max_warn_rate_) {
+        return;
+      }
+
+      // Setup diagnostics
+      custom_diagnostic_tasks::RateBoundStatus rate_bound_status(
+          this,
+          custom_diagnostic_tasks::RateBoundStatusParam(min_ok_rate_.value(), max_ok_rate_.value()),
+          custom_diagnostic_tasks::RateBoundStatusParam(min_warn_rate_.value(), max_warn_rate_.value()),
+          static_cast<size_t>(observed_frames_transition_), true,
+          "rate bound check");
+      diag_composer_->addTask(&rate_bound_status);
+
+      double target_frequency = publish_rate_;
+      if (target_frequency < 0) {
+        if (std::abs(time_per_frame_.value()[1]) < std::numeric_limits<double>::epsilon() * 1e2) {
+          // time_per_frame_ may be [0, 0] by default in some environments
+          // In that case, diagnostics will be published at a rate between the min and max OK rate values
+          target_frequency = (min_ok_rate_.value() + max_ok_rate_.value()) / 2;
+        } else {
+          target_frequency =
+              static_cast<double>(time_per_frame_.value()[1]) / time_per_frame_.value()[0];
+        }
+      }
+      diag_updater_->setPeriod(1./target_frequency);  // align diag rate and ideal topic rate
+
+      bool is_v4l2_buffer_flag_error_detected = true;
+      diagnostic_updater::FunctionDiagnosticTask buffer_flag_check_diag(
+          "buffer flag check", std::bind(&diagnoseV4l2BufferFlag, std::placeholders::_1,
+                                         std::cref(is_v4l2_buffer_flag_error_detected),
+                                         std::ref(lock_)));
+
+      diag_composer_->addTask(&buffer_flag_check_diag);
+
+      std::optional<uint32_t> sequence = 0;
+      uint32_t max_sequence_value = 0;
+      std::optional<timeval> raw_timestamp{};
+      int64_t max_timestamp_value = 0;
+      bool is_frame_updated = false;
+      diagnostic_updater::FunctionDiagnosticTask stream_liveness_check_diag(
+          "stream liveness check", std::bind(&diagnoseStreamLiveness, std::placeholders::_1,
+                                             std::cref(sequence), std::ref(max_sequence_value),
+                                             std::cref(raw_timestamp), std::ref(max_timestamp_value),
+                                             std::ref(is_frame_updated), std::ref(lock_)));
+
+      diag_composer_->addTask(&stream_liveness_check_diag);
+      this->diag_updater_->add(*diag_composer_);
+
+      // Start capture loop
       while (rclcpp::ok() && !canceled_.load()) {
         RCLCPP_DEBUG(get_logger(), "Capture...");
-        auto img = camera_->capture();
+        sensor_msgs::msg::Image::UniquePtr img;
+        {
+          std::lock_guard<std::mutex> lock(lock_);
+          std::tie(img, is_v4l2_buffer_flag_error_detected, sequence, raw_timestamp) = camera_->capture();
+          is_frame_updated = true;
+        }
         if (img == nullptr) {
           // Failed capturing image, assume it is temporarily and continue a bit later
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -137,7 +318,14 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
         ci->header.frame_id = camera_frame_id_;
         publish_next_frame_ = publish_rate_ < 0;
 
-        camera_transport_pub_.publish(*img, *ci);
+        if (use_image_transport_) {
+          camera_transport_pub_.publish(*img, *ci);
+        } else {
+          image_pub_->publish(std::move(img));
+          info_pub_->publish(std::move(ci));
+        }
+        // Record the current timestamp to monitor the interval diagnostics
+        rate_bound_status.tick();
       }
     }
   };
@@ -246,17 +434,17 @@ void V4L2Camera::createParameters()
   requestImageSize(image_size);
 
   // Time per frame
-  if (camera_->timePerFrameSupported()) {
-    auto tpf = camera_->getCurrentTimePerFrame();
-    auto time_per_frame_descriptor = rcl_interfaces::msg::ParameterDescriptor{};
-    time_per_frame_descriptor.name = "time_per_frame";
-    time_per_frame_descriptor.description = "Desired period between successive frames in seconds";
-    time_per_frame_descriptor.additional_constraints =
-      "Length 2 array, with numerator and denominator";
-    auto time_per_frame = declare_parameter<TimePerFrame>(
+  auto tpf = camera_->getCurrentTimePerFrame();
+  auto time_per_frame_descriptor = rcl_interfaces::msg::ParameterDescriptor{};
+  time_per_frame_descriptor.name = "time_per_frame";
+  time_per_frame_descriptor.description = "Desired period between successive frames in seconds";
+  time_per_frame_descriptor.additional_constraints =
+      "Length 2 array, with numerator (second) and denominator (frames)";
+  time_per_frame_ = declare_parameter<TimePerFrame>(
       "time_per_frame", {tpf.first, tpf.second},
       time_per_frame_descriptor);
-    requestTimePerFrame(time_per_frame);
+  if (camera_->timePerFrameSupported()) {
+    requestTimePerFrame(time_per_frame_.value());
   }
 
   // Control parameters
@@ -503,6 +691,28 @@ static void yuyv2rgb(unsigned char const * YUV, unsigned char * RGB, int NumPixe
   }
 }
 
+static void uyvy2rgb(unsigned char const * YUV, unsigned char * RGB, int NumPixels)
+{
+  int i, j;
+  unsigned char y0, y1, u, v;
+  unsigned char r, g, b;
+
+  for (i = 0, j = 0; i < (NumPixels << 1); i += 4, j += 6) {
+    u = YUV[i + 0];
+    y0 = YUV[i + 1];
+    v = YUV[i + 2];
+    y1 = YUV[i + 3];
+    YUV2RGB(y0, u, v, &r, &g, &b);
+    RGB[j + 0] = r;
+    RGB[j + 1] = g;
+    RGB[j + 2] = b;
+    YUV2RGB(y1, u, v, &r, &g, &b);
+    RGB[j + 3] = r;
+    RGB[j + 4] = g;
+    RGB[j + 5] = b;
+  }
+}
+
 sensor_msgs::msg::Image::UniquePtr V4L2Camera::convert(sensor_msgs::msg::Image const & img) const
 {
   RCLCPP_DEBUG(
@@ -525,7 +735,22 @@ sensor_msgs::msg::Image::UniquePtr V4L2Camera::convert(sensor_msgs::msg::Image c
         outImg->width);
     }
     return outImg;
-  } else {
+  } else if (img.encoding == sensor_msgs::image_encodings::YUV422 &&
+    output_encoding_ == sensor_msgs::image_encodings::RGB8)
+  {
+    auto outImg = std::make_unique<sensor_msgs::msg::Image>();
+    outImg->width = img.width;
+    outImg->height = img.height;
+    outImg->step = img.width * 3;
+    outImg->encoding = output_encoding_;
+    outImg->data.resize(outImg->height * outImg->step);
+    for (auto i = 0u; i < outImg->height; ++i) {
+      uyvy2rgb(
+        img.data.data() + i * img.step, outImg->data.data() + i * outImg->step,
+        outImg->width);
+    }
+    return outImg;
+  }else {
     RCLCPP_WARN_ONCE(
       get_logger(),
       "Conversion not supported yet: %s -> %s", img.encoding.c_str(), output_encoding_.c_str());

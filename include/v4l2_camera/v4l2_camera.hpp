@@ -20,6 +20,7 @@
 
 #include <camera_info_manager/camera_info_manager.hpp>
 #include <image_transport/image_transport.hpp>
+#include <diagnostic_updater/diagnostic_updater.hpp>
 
 #include <ostream>
 #include <rclcpp/rclcpp.hpp>
@@ -29,6 +30,9 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <optional>
+#include <mutex>
+
 
 #include "v4l2_camera/visibility_control.h"
 
@@ -118,6 +122,23 @@ private:
   rclcpp::TimerBase::SharedPtr image_pub_timer_;
 
   bool publish_next_frame_;
+  bool use_image_transport_;
+
+  std::shared_ptr<diagnostic_updater::Updater> diag_updater_;
+  std::shared_ptr<diagnostic_updater::CompositeDiagnosticTask> diag_composer_;
+
+  // To keep publishing diagnostics even after the constuctor of V4L2Camera class fail,
+  // this FunctionDiagnosticTask should be declared as a class member due to lifetime
+  std::shared_ptr<diagnostic_updater::FunctionDiagnosticTask> device_node_existence_diag_;
+
+  std::optional<TimePerFrame> time_per_frame_;
+  std::optional<double> min_ok_rate_;
+  std::optional<double> max_ok_rate_;
+  std::optional<double> min_warn_rate_;
+  std::optional<double> max_warn_rate_;
+  int observed_frames_transition_;
+
+  std::mutex lock_;
 
 #ifdef ENABLE_CUDA
   // Memory region to communicate with GPU

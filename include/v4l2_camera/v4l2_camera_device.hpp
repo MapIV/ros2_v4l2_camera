@@ -23,6 +23,7 @@
 #include <utility>
 #include <tuple>
 #include <vector>
+#include <optional>
 
 #include "v4l2_camera/control.hpp"
 #include "v4l2_camera/image_format.hpp"
@@ -86,7 +87,17 @@ public:
 
   void setTSCOffset();
 
-  sensor_msgs::msg::Image::UniquePtr capture();
+  /**
+   * This function returns:
+   * - unique pointer for captured image
+   * - bool value to show V4L2_BUF_FLAG_ERROR is set to dequeued buffer
+   * - sequence number
+   * - raw buffer timestamp
+   * all items other than image are for monitoring stream correctness 
+   */
+  std::tuple<sensor_msgs::msg::Image::UniquePtr, bool, std::optional<uint32_t>,
+             std::optional<timeval>>
+  capture();
 
 private:
   /// Image buffer
@@ -119,6 +130,8 @@ private:
   std::vector<Buffer> buffers_;
 
   void getCaptureParameters();
+
+  bool getL4TMajorVersion(std::string &version);
 
   // Requests and stores all formats available for this camera
   void listImageFormats();
